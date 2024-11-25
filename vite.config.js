@@ -1,6 +1,11 @@
+// vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'url';
 import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   plugins: [react()],
@@ -9,7 +14,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  base: process.env.GITHUB_PAGES ? '/chess-club/' : '/',
+  base: process.env.GITHUB_PAGES ? '/chess-club-react/' : '/',
   build: {
     target: 'esnext',
     outDir: 'dist',

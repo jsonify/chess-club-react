@@ -1,3 +1,4 @@
+// eslint.config.js
 import js from '@eslint/js'
 import globals from 'globals'
 import react from 'eslint-plugin-react'
@@ -10,14 +11,19 @@ export default [
     files: ['**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2020,
-      globals: globals.browser,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        process: 'readonly',
+        __dirname: 'readonly'
+      },
       parserOptions: {
-        ecmaVersion: 'latest',
         ecmaFeatures: { jsx: true },
-        sourceType: 'module',
       },
     },
-    settings: { react: { version: '18.3' } },
+    settings: { 
+      react: { version: '18.3' }
+    },
     plugins: {
       react,
       'react-hooks': reactHooks,
@@ -29,10 +35,16 @@ export default [
       ...react.configs['jsx-runtime'].rules,
       ...reactHooks.configs.recommended.rules,
       'react/jsx-no-target-blank': 'off',
+      'react/prop-types': 'warn', // Changed from error to warning for now
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
       ],
+      'no-unused-vars': 'warn',
+      'no-undef': 'error',
+      'no-case-declarations': 'off',
+      'react/react-in-jsx-scope': 'off',
+      'react-hooks/exhaustive-deps': 'warn'
     },
   },
 ]
