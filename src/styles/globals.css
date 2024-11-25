@@ -1,0 +1,22 @@
+/* src/styles/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .headless-card {
+    @apply bg-white rounded-lg shadow-md overflow-hidden;
+  }
+
+  .headless-card-header {
+    @apply px-6 py-4 bg-gray-50 border-b;
+  }
+
+  .headless-card-title {
+    @apply text-lg font-medium text-gray-900;
+  }
+
+  .headless-card-content {
+    @apply p-6;
+  }
+}
