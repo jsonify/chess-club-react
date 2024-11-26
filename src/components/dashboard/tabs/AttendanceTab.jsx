@@ -4,7 +4,6 @@ import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Wifi, WifiOff } from 'lucide-react';
 
 export default function AttendanceTab({
   students,
