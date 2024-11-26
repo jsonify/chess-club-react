@@ -1,8 +1,11 @@
 // src/components/StudentTable.jsx
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Search, X, Phone, Mail } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, X, Phone, Mail, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
-export default function StudentTable({ students }) {
+export default function StudentTable({ students: initialStudents }) {
+  const [students, setStudents] = useState(initialStudents);
   const [sortConfig, setSortConfig] = useState({
     key: 'last_name',
     direction: 'asc'
@@ -11,6 +14,39 @@ export default function StudentTable({ students }) {
   const [filterGrade, setFilterGrade] = useState('all');
   const [showInactive, setShowInactive] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [updatingStatus, setUpdatingStatus] = useState(null);
+
+  // Function to toggle student active status
+  const toggleStudentStatus = async (studentId, currentStatus) => {
+    try {
+      setUpdatingStatus(studentId);
+      
+      const { data, error } = await supabase
+        .from('students')
+        .update({ active: !currentStatus })
+        .eq('id', studentId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update local state
+      setStudents(prevStudents =>
+        prevStudents.map(student =>
+          student.id === studentId 
+            ? { ...student, active: !currentStatus }
+            : student
+        )
+      );
+
+      toast.success(`Student ${data.active ? 'activated' : 'deactivated'} successfully`);
+    } catch (error) {
+      console.error('Error updating student status:', error);
+      toast.error('Failed to update student status');
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
 
   // Sort function
   const sortedStudents = [...students].sort((a, b) => {
@@ -34,9 +70,9 @@ export default function StudentTable({ students }) {
   // Filter function
   const filteredStudents = sortedStudents.filter(student => {
     const matchesSearch = (
-      student.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.teacher.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.teacher?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.contact1_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.contact2_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -249,10 +285,12 @@ export default function StudentTable({ students }) {
             {filteredStudents.map((student) => (
               <tr 
                 key={student.id} 
-                className="hover:bg-gray-50 cursor-pointer" 
-                onClick={() => setSelectedStudent(student)}
+                className="hover:bg-gray-50"
               >
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td 
+                  className="px-6 py-4 whitespace-nowrap cursor-pointer"
+                  onClick={() => setSelectedStudent(student)}
+                >
                   <div className="text-sm font-medium text-gray-900">
                     {student.last_name}, {student.first_name}
                   </div>
@@ -264,13 +302,21 @@ export default function StudentTable({ students }) {
                   <div className="text-sm text-gray-900">{student.teacher}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    student.active
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {student.active ? 'Active' : 'Inactive'}
-                  </span>
+                  <button
+                    onClick={() => toggleStudentStatus(student.id, student.active)}
+                    disabled={updatingStatus === student.id}
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      student.active
+                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
+                  >
+                    {updatingStatus === student.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      student.active ? 'Active' : 'Inactive'
+                    )}
+                  </button>
                 </td>
               </tr>
             ))}
@@ -283,11 +329,6 @@ export default function StudentTable({ students }) {
             )}
           </tbody>
         </table>
-      </div>
-      <div className="px-6 py-4 border-t border-gray-200">
-        <p className="text-sm text-gray-500">
-          Showing {filteredStudents.length} of {students.length} students
-        </p>
       </div>
 
       {selectedStudent && (

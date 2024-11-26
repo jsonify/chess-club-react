@@ -1,8 +1,8 @@
 // src/components/attendance/RealTimeAttendance.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, CheckCircle, Loader2, Wifi, WifiOff, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
+import { formatDate, formatDateForDB, getNextWednesday, isWednesday } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export default function RealTimeAttendance() {
@@ -14,227 +14,19 @@ export default function RealTimeAttendance() {
   const [currentSession, setCurrentSession] = useState(null);
   const [isConnected, setIsConnected] = useState(true);
   const [sortConfig, setSortConfig] = useState({
-    key: 'first_name',
+    key: 'last_name',
     direction: 'asc'
   });
 
-  const targetDate = isWednesday(new Date()) ? new Date() : getNextWednesday();
-  const formattedTargetDate = formatDate(targetDate);
+  // Use useMemo for targetDate calculation
+  const targetDate = useMemo(() => {
+    const date = isWednesday(new Date()) ? new Date() : getNextWednesday();
+    // Ensure we're working with a clean date (no time component)
+    return new Date(date.toISOString().split('T')[0]);
+  }, []); 
 
-  async function loadInitialData() {
-    try {
-      setLoading(true);
-      
-      // Load active students
-      const { data: activeStudents, error: studentsError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('active', true)
-        .order('grade')
-        .order('last_name');
-
-      if (studentsError) throw studentsError;
-      setStudents(activeStudents || []);
-
-      // Get or create attendance session
-      const session = await getOrCreateSession(targetDate);
-      setCurrentSession(session);
-
-      // Load attendance records
-      if (session) {
-        const { data: records, error: recordsError } = await supabase
-          .from('attendance_records')
-          .select('*')
-          .eq('session_id', session.id);
-
-        if (recordsError) throw recordsError;
-
-        const attendanceMap = {};
-        records?.forEach(record => {
-          attendanceMap[record.student_id] = {
-            checkedIn: !!record.check_in_time,
-            checkedOut: !!record.check_out_time,
-            recordId: record.id
-          };
-        });
-
-        setAttendance(attendanceMap);
-      }
-
-    } catch (err) {
-      console.error('Error loading data:', err);
-      setError(err.message);
-      toast.error('Failed to load attendance data');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function getOrCreateSession(date) {
-    const formattedDate = formatDate(date);
-    
-    // Try to get existing session
-    let { data: existingSession } = await supabase
-      .from('attendance_sessions')
-      .select('*')
-      .eq('session_date', formattedDate)
-      .single();
-
-    if (!existingSession) {
-      // Create new session
-      const { data: newSession, error: createError } = await supabase
-        .from('attendance_sessions')
-        .insert([{
-          session_date: formattedDate,
-          start_time: '15:30',
-          end_time: '16:30'
-        }])
-        .select()
-        .single();
-
-      if (createError) throw createError;
-      existingSession = newSession;
-    }
-
-    return existingSession;
-  }
-
-  async function handleRealtimeUpdate(payload) {
-    try {
-      console.log('Received real-time update:', payload);
-      
-      if (payload.eventType === 'DELETE') {
-        setAttendance(prev => {
-          const newState = { ...prev };
-          delete newState[payload.old.student_id];
-          return newState;
-        });
-        return;
-      }
-
-      const { data: record, error } = await supabase
-        .from('attendance_records')
-        .select('*')
-        .eq('id', payload.new.id)
-        .single();
-
-      if (error) throw error;
-
-      setAttendance(prev => ({
-        ...prev,
-        [record.student_id]: {
-          checkedIn: !!record.check_in_time,
-          checkedOut: !!record.check_out_time,
-          recordId: record.id
-        }
-      }));
-
-    } catch (err) {
-      console.error('Error handling real-time update:', err);
-      toast.error('Failed to process attendance update');
-    }
-  }
-
-  async function toggleAttendance(studentId, action) {
-    if (!currentSession) {
-      toast.error('No active session found');
-      return;
-    }
-
-    try {
-      if (action === 'checkin') {
-        const isCheckedIn = attendance[studentId]?.checkedIn;
-
-        if (isCheckedIn) {
-          // Remove check-in
-          const recordId = attendance[studentId].recordId;
-          const { error: deleteError } = await supabase
-            .from('attendance_records')
-            .delete()
-            .eq('id', recordId);
-
-          if (deleteError) throw deleteError;
-
-          setAttendance(prev => {
-            const newState = { ...prev };
-            delete newState[studentId];
-            return newState;
-          });
-
-        } else {
-          // Create new check-in
-          const { data: record, error: insertError } = await supabase
-            .from('attendance_records')
-            .insert([{
-              student_id: studentId,
-              session_id: currentSession.id,
-              check_in_time: new Date().toISOString()
-            }])
-            .select()
-            .single();
-
-          if (insertError) throw insertError;
-
-          setAttendance(prev => ({
-            ...prev,
-            [studentId]: {
-              checkedIn: true,
-              checkedOut: false,
-              recordId: record.id
-            }
-          }));
-        }
-
-      } else if (action === 'checkout' && attendance[studentId]?.checkedIn) {
-        const recordId = attendance[studentId].recordId;
-        const { error: updateError } = await supabase
-          .from('attendance_records')
-          .update({ 
-            check_out_time: new Date().toISOString() 
-          })
-          .eq('id', recordId);
-
-        if (updateError) throw updateError;
-
-        setAttendance(prev => ({
-          ...prev,
-          [studentId]: {
-            ...prev[studentId],
-            checkedOut: true
-          }
-        }));
-      }
-
-    } catch (err) {
-      console.error('Error updating attendance:', err);
-      toast.error('Failed to update attendance');
-    }
-  }
-
-  useEffect(() => {
-    loadInitialData();
-  }, [formattedTargetDate]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel('attendance-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'attendance_records'
-        },
-        handleRealtimeUpdate
-      )
-      .subscribe((status) => {
-        setIsConnected(status === 'SUBSCRIBED');
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  const formattedTargetDate = formatDateForDB(targetDate);
+  const displayDate = formatDate(targetDate);
 
   const requestSort = (key) => {
     setSortConfig(current => ({
@@ -282,11 +74,9 @@ export default function RealTimeAttendance() {
       }
       
       if (!aValue || !bValue) return 0;
-      
-      if (sortConfig.direction === 'asc') {
-        return aValue.localeCompare(bValue);
-      }
-      return bValue.localeCompare(aValue);
+      return sortConfig.direction === 'asc'
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue);
     });
 
     return sorted.filter(student =>
@@ -295,6 +85,246 @@ export default function RealTimeAttendance() {
       student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   };
+
+  async function getOrCreateSession(date) {
+    try {
+      // Ensure we have a clean DATE format (YYYY-MM-DD)
+      const targetDate = new Date(date);
+      const formattedDate = targetDate.toISOString().split('T')[0];
+      
+      console.log('Querying for session date:', formattedDate); // Debug log
+  
+      // First try to get existing session
+      const { data: existingSession, error: fetchError } = await supabase
+        .from('attendance_sessions')
+        .select('id, session_date')
+        .eq('session_date', formattedDate)
+        .single();
+  
+      if (fetchError && fetchError.code !== 'PGRST116') { // Not found error
+        throw fetchError;
+      }
+  
+      if (existingSession) {
+        return existingSession;
+      }
+  
+      // If no session exists, create one
+      const { data: newSession, error: createError } = await supabase
+        .from('attendance_sessions')
+        .insert([
+          {
+            session_date: formattedDate,
+            start_time: '15:30',
+            end_time: '16:30'
+          }
+        ])
+        .select()
+        .single();
+  
+      if (createError) {
+        throw createError;
+      }
+  
+      return newSession;
+    } catch (err) {
+      console.error('Session management error:', err);
+      throw new Error(`Failed to manage session: ${err.message}`);
+    }
+  }
+  
+  async function loadInitialData() {
+    try {
+      setLoading(true);
+      
+      // Get or create attendance session
+      const session = await getOrCreateSession(targetDate);
+      setCurrentSession(session);
+  
+      // Load active students
+      const { data: activeStudents, error: studentsError } = await supabase
+        .from('students')
+        .select('*')
+        .eq('active', true)
+        .order('grade')
+        .order('last_name');
+  
+      if (studentsError) throw studentsError;
+      setStudents(activeStudents || []);
+  
+      // Load attendance records for current session
+      if (session) {
+        const { data: records, error: recordsError } = await supabase
+          .from('attendance_records')
+          .select('*')
+          .eq('session_id', session.id);
+  
+        if (recordsError) throw recordsError;
+  
+        const attendanceMap = {};
+        records?.forEach(record => {
+          attendanceMap[record.student_id] = {
+            checkedIn: !!record.check_in_time,
+            checkedOut: !!record.check_out_time,
+            recordId: record.id
+          };
+        });
+  
+        setAttendance(attendanceMap);
+      }
+  
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError(err.message);
+      toast.error('Failed to load attendance data');
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  // Add useEffect for initial load and realtime updates
+  useEffect(() => {
+    loadInitialData();
+  
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('attendance-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'attendance_records'
+        },
+        async (payload) => {
+          if (!currentSession) return;
+  
+          try {
+            if (payload.eventType === 'DELETE') {
+              setAttendance(prev => {
+                const studentId = Object.keys(prev).find(
+                  key => prev[key].recordId === payload.old.id
+                );
+                if (!studentId) return prev;
+  
+                const newState = { ...prev };
+                delete newState[studentId];
+                return newState;
+              });
+              return;
+            }
+  
+            if (payload.new.session_id === currentSession.id) {
+              setAttendance(prev => ({
+                ...prev,
+                [payload.new.student_id]: {
+                  checkedIn: !!payload.new.check_in_time,
+                  checkedOut: !!payload.new.check_out_time,
+                  recordId: payload.new.id
+                }
+              }));
+            }
+          } catch (err) {
+            console.error('Error handling realtime update:', err);
+          }
+        }
+      )
+      .subscribe((status) => {
+        setIsConnected(status === 'SUBSCRIBED');
+      });
+  
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [formattedTargetDate]);
+
+  async function toggleAttendance(studentId, action) {
+    if (!currentSession) {
+      toast.error('No active session found');
+      return;
+    }
+
+    try {
+      // First check if a record already exists
+      const { data: existingRecord } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('session_id', currentSession.id)
+        .single();
+
+      if (action === 'checkin') {
+        if (existingRecord?.check_in_time) {
+          // Remove check-in
+          const { error: deleteError } = await supabase
+            .from('attendance_records')
+            .delete()
+            .eq('id', existingRecord.id);
+
+          if (deleteError) throw deleteError;
+
+          // Update local state
+          setAttendance(prev => {
+            const newState = { ...prev };
+            delete newState[studentId];
+            return newState;
+          });
+        } else {
+          // Create or update check-in
+          const operation = existingRecord ? 'update' : 'insert';
+          const checkInData = {
+            student_id: studentId,
+            session_id: currentSession.id,
+            check_in_time: new Date().toISOString()
+          };
+
+          const { data: record, error: operationError } = await supabase
+            .from('attendance_records')
+            [operation === 'update' ? 'update' : 'insert'](
+              operation === 'update' 
+                ? { check_in_time: checkInData.check_in_time }
+                : checkInData
+            )
+            [operation === 'update' ? 'eq' : 'select'](...(operation === 'update' 
+              ? ['id', existingRecord.id]
+              : ['*']
+            ));
+
+          if (operationError) throw operationError;
+
+          // Update local state
+          setAttendance(prev => ({
+            ...prev,
+            [studentId]: {
+              checkedIn: true,
+              checkedOut: false,
+              recordId: operation === 'update' ? existingRecord.id : record[0].id
+            }
+          }));
+        }
+      } else if (action === 'checkout' && existingRecord) {
+        // Update checkout time
+        const { error: updateError } = await supabase
+          .from('attendance_records')
+          .update({ check_out_time: new Date().toISOString() })
+          .eq('id', existingRecord.id);
+
+        if (updateError) throw updateError;
+
+        // Update local state
+        setAttendance(prev => ({
+          ...prev,
+          [studentId]: {
+            ...prev[studentId],
+            checkedOut: true
+          }
+        }));
+      }
+    } catch (err) {
+      console.error('Error updating attendance:', err);
+      toast.error('Failed to update attendance');
+    }
+  }
 
   if (loading) {
     return (
@@ -314,6 +344,7 @@ export default function RealTimeAttendance() {
 
   return (
     <div className="bg-white rounded-lg shadow">
+      {/* Header section */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -321,7 +352,7 @@ export default function RealTimeAttendance() {
               <h2 className="text-lg font-medium">
                 {isWednesday(new Date())
                   ? "Today's Attendance"
-                  : "Next Wednesday's Attendance"} ({formattedTargetDate})
+                  : "Next Wednesday's Attendance"} ({displayDate})
               </h2>
               {isConnected ? (
                 <Wifi className="h-5 w-5 text-green-500" />
@@ -351,13 +382,6 @@ export default function RealTimeAttendance() {
                 Grade
                 <SortIcon columnKey="grade" />
               </button>
-              <button
-                onClick={() => requestSort('teacher')}
-                className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-700"
-              >
-                Teacher
-                <SortIcon columnKey="teacher" />
-              </button>
             </div>
           </div>
           <div className="relative w-full sm:w-auto">
@@ -373,6 +397,7 @@ export default function RealTimeAttendance() {
         </div>
       </div>
 
+      {/* Student list */}
       <div className="divide-y">
         {getSortedStudents().map(student => (
           <div
