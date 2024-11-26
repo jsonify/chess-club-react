@@ -1,5 +1,5 @@
 // src/components/dashboard/ChessClubDashboard.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { formatDate, isWednesday, getNextWednesday } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -23,6 +23,117 @@ export default function ChessClubDashboard() {
     presentToday: 0,
     attendanceRate: 0
   });
+  const [connectionStatus, setConnectionStatus] = useState({
+    isConnected: false,
+    lastError: null,
+    reconnectAttempts: 0
+  }); 
+
+  const setupRealtimeSubscription = useCallback(async () => {
+    try {
+      console.log('Setting up realtime subscription...');
+      
+      // First, check Supabase connection
+      const { error: healthCheckError } = await supabase
+        .from('students')
+        .select('id')
+        .limit(1);
+
+      if (healthCheckError) {
+        throw new Error('Database connection check failed');
+      }
+
+      const channel = supabase
+        .channel('attendance-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'attendance_records',
+          },
+          handleRealtimeUpdate
+        )
+        .on('presence', { event: 'sync' }, () => {
+          console.log('Presence sync occurred');
+        })
+        .on('presence', { event: 'join' }, ({ key, currentPresences }) => {
+          console.log('Join occurred:', key, currentPresences);
+        })
+        .on('presence', { event: 'leave' }, ({ key, currentPresences }) => {
+          console.log('Leave occurred:', key, currentPresences);
+        })
+        .on('system', { event: '*' }, (payload) => {
+          console.log('System event occurred:', payload);
+        })
+        .subscribe(async (status) => {
+          console.log('Subscription status:', status);
+          
+          if (status === 'SUBSCRIBED') {
+            setConnectionStatus(prev => ({
+              isConnected: true,
+              lastError: null,
+              reconnectAttempts: 0
+            }));
+            toast.success('Real-time connection established');
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            setConnectionStatus(prev => ({
+              isConnected: false,
+              lastError: `Connection ${status.toLowerCase()}`,
+              reconnectAttempts: prev.reconnectAttempts + 1
+            }));
+            toast.error(`Real-time connection lost: ${status}`);
+            
+            // Attempt to reconnect after a delay
+            if (status === 'CLOSED') {
+              setTimeout(() => {
+                setupRealtimeSubscription();
+              }, 5000); // Wait 5 seconds before reconnecting
+            }
+          }
+        });
+
+      return channel;
+
+    } catch (error) {
+      console.error('Error setting up realtime subscription:', error);
+      setConnectionStatus(prev => ({
+        isConnected: false,
+        lastError: error.message,
+        reconnectAttempts: prev.reconnectAttempts + 1
+      }));
+      toast.error(`Connection error: ${error.message}`);
+      
+      // Attempt to reconnect after a delay
+      setTimeout(() => {
+        setupRealtimeSubscription();
+      }, 5000);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadInitialData();
+    
+    let channel;
+    setupRealtimeSubscription().then(ch => {
+      channel = ch;
+    });
+
+    // Add connection monitoring
+    const intervalId = setInterval(() => {
+      if (!connectionStatus.isConnected && connectionStatus.reconnectAttempts < 5) {
+        console.log('Checking connection...');
+        setupRealtimeSubscription();
+      }
+    }, 30000); // Check every 30 seconds
+
+    return () => {
+      clearInterval(intervalId);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [setupRealtimeSubscription]);
 
   useEffect(() => {
     loadInitialData();
@@ -277,15 +388,16 @@ export default function ChessClubDashboard() {
         </div>
 
         <div className="mt-4">
-          {activeTab === 'attendance' && (
-            <AttendanceTab 
-              students={students}
-              attendance={attendance}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              toggleAttendance={toggleAttendance}
-              loading={loading}
-            />
+        {activeTab === 'attendance' && (
+        <AttendanceTab 
+          students={students}
+          attendance={attendance}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          toggleAttendance={toggleAttendance}
+          loading={loading}
+          connectionStatus={connectionStatus}  // Pass connection status
+        />
           )}
           {activeTab === 'students' && (
             <StudentsTab
