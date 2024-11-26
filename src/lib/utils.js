@@ -12,17 +12,6 @@ export function formatDate(date) {
 }
 
 /**
- * Format a date to YYYY-MM-DD for Supabase queries
- */
-export function formatDateForDB(date) {
-  const d = new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-/**
  * Get the next Wednesday's date
  */
 export function getNextWednesday() {
@@ -42,6 +31,14 @@ export function getNextWednesday() {
  */
 export function isWednesday(date) {
   return new Date(date).getDay() === 3;
+}
+
+/**
+ * Format a date to YYYY-MM-DD for Supabase queries
+ */
+export function formatDateForDB(date) {
+  const d = new Date(date);
+  return d.toISOString().split('T')[0];
 }
 
 /**

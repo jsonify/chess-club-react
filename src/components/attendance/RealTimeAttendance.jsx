@@ -1,4 +1,3 @@
-// src/components/attendance/RealTimeAttendance.jsx
 import { useState, useEffect, useMemo } from 'react';
 import { Search, CheckCircle, Loader2, Wifi, WifiOff, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -18,12 +17,11 @@ export default function RealTimeAttendance() {
     direction: 'asc'
   });
 
-  // Use useMemo for targetDate calculation
+  // Use useMemo to calculate the target date once
   const targetDate = useMemo(() => {
-    const date = isWednesday(new Date()) ? new Date() : getNextWednesday();
-    // Ensure we're working with a clean date (no time component)
-    return new Date(date.toISOString().split('T')[0]);
-  }, []); 
+    const date = new Date();
+    return date.toISOString().split('T')[0]; // Always use YYYY-MM-DD format
+  }, []);
 
   const formattedTargetDate = formatDateForDB(targetDate);
   const displayDate = formatDate(targetDate);
@@ -88,155 +86,51 @@ export default function RealTimeAttendance() {
 
   async function getOrCreateSession(date) {
     try {
-      // Ensure we have a clean DATE format (YYYY-MM-DD)
-      const targetDate = new Date(date);
-      const formattedDate = targetDate.toISOString().split('T')[0];
-      
-      console.log('Querying for session date:', formattedDate); // Debug log
-  
-      // First try to get existing session
+      // Ensure date is in YYYY-MM-DD format
+      const formattedDate = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+      console.log('Querying for session date:', formattedDate);
+
+      // Use the formatted date in the query
       const { data: existingSession, error: fetchError } = await supabase
         .from('attendance_sessions')
         .select('id, session_date')
         .eq('session_date', formattedDate)
         .single();
-  
-      if (fetchError && fetchError.code !== 'PGRST116') { // Not found error
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Fetch error:', fetchError);
         throw fetchError;
       }
-  
+
       if (existingSession) {
+        console.log('Found existing session:', existingSession);
         return existingSession;
       }
-  
-      // If no session exists, create one
+
+      // Create new session with the same formatted date
       const { data: newSession, error: createError } = await supabase
         .from('attendance_sessions')
-        .insert([
-          {
-            session_date: formattedDate,
-            start_time: '15:30',
-            end_time: '16:30'
-          }
-        ])
+        .insert([{
+          session_date: formattedDate,
+          start_time: '15:30',
+          end_time: '16:30'
+        }])
         .select()
         .single();
-  
+
       if (createError) {
+        console.error('Create error:', createError);
         throw createError;
       }
-  
+
+      console.log('Created new session:', newSession);
       return newSession;
+
     } catch (err) {
       console.error('Session management error:', err);
       throw new Error(`Failed to manage session: ${err.message}`);
     }
   }
-  
-  async function loadInitialData() {
-    try {
-      setLoading(true);
-      
-      // Get or create attendance session
-      const session = await getOrCreateSession(targetDate);
-      setCurrentSession(session);
-  
-      // Load active students
-      const { data: activeStudents, error: studentsError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('active', true)
-        .order('grade')
-        .order('last_name');
-  
-      if (studentsError) throw studentsError;
-      setStudents(activeStudents || []);
-  
-      // Load attendance records for current session
-      if (session) {
-        const { data: records, error: recordsError } = await supabase
-          .from('attendance_records')
-          .select('*')
-          .eq('session_id', session.id);
-  
-        if (recordsError) throw recordsError;
-  
-        const attendanceMap = {};
-        records?.forEach(record => {
-          attendanceMap[record.student_id] = {
-            checkedIn: !!record.check_in_time,
-            checkedOut: !!record.check_out_time,
-            recordId: record.id
-          };
-        });
-  
-        setAttendance(attendanceMap);
-      }
-  
-    } catch (err) {
-      console.error('Error loading data:', err);
-      setError(err.message);
-      toast.error('Failed to load attendance data');
-    } finally {
-      setLoading(false);
-    }
-  }
-  
-  // Add useEffect for initial load and realtime updates
-  useEffect(() => {
-    loadInitialData();
-  
-    // Set up real-time subscription
-    const channel = supabase
-      .channel('attendance-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'attendance_records'
-        },
-        async (payload) => {
-          if (!currentSession) return;
-  
-          try {
-            if (payload.eventType === 'DELETE') {
-              setAttendance(prev => {
-                const studentId = Object.keys(prev).find(
-                  key => prev[key].recordId === payload.old.id
-                );
-                if (!studentId) return prev;
-  
-                const newState = { ...prev };
-                delete newState[studentId];
-                return newState;
-              });
-              return;
-            }
-  
-            if (payload.new.session_id === currentSession.id) {
-              setAttendance(prev => ({
-                ...prev,
-                [payload.new.student_id]: {
-                  checkedIn: !!payload.new.check_in_time,
-                  checkedOut: !!payload.new.check_out_time,
-                  recordId: payload.new.id
-                }
-              }));
-            }
-          } catch (err) {
-            console.error('Error handling realtime update:', err);
-          }
-        }
-      )
-      .subscribe((status) => {
-        setIsConnected(status === 'SUBSCRIBED');
-      });
-  
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [formattedTargetDate]);
 
   async function toggleAttendance(studentId, action) {
     if (!currentSession) {
@@ -325,6 +219,113 @@ export default function RealTimeAttendance() {
       toast.error('Failed to update attendance');
     }
   }
+
+// First useEffect for initial data load
+useEffect(() => {
+  async function loadInitialData() {
+    try {
+      setLoading(true);
+      const session = await getOrCreateSession(targetDate);
+      setCurrentSession(session);
+
+      // Load active students
+      const { data: activeStudents, error: studentsError } = await supabase
+        .from('students')
+        .select('*')
+        .eq('active', true)
+        .order('grade')
+        .order('last_name');
+
+      if (studentsError) throw studentsError;
+      setStudents(activeStudents || []);
+
+      // Load attendance records
+      if (session) {
+        const { data: records, error: recordsError } = await supabase
+          .from('attendance_records')
+          .select('*')
+          .eq('session_id', session.id);
+
+        if (recordsError) throw recordsError;
+
+        const attendanceMap = {};
+        records?.forEach(record => {
+          attendanceMap[record.student_id] = {
+            checkedIn: !!record.check_in_time,
+            checkedOut: !!record.check_out_time,
+            recordId: record.id
+          };
+        });
+
+        setAttendance(attendanceMap);
+      }
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError(err.message);
+      toast.error('Failed to load attendance data');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  loadInitialData();
+}, [targetDate]); // Only depend on targetDate
+
+// Second useEffect for real-time subscription
+useEffect(() => {
+  if (!currentSession) return; // Don't set up subscription without a session
+
+  console.log('Setting up real-time subscription for session:', currentSession.id);
+  
+  const channel = supabase
+    .channel(`attendance-changes-${currentSession.id}`) // Make channel name unique per session
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'attendance_records',
+        filter: `session_id=eq.${currentSession.id}` // Filter for current session only
+      },
+      async (payload) => {
+        try {
+          if (payload.eventType === 'DELETE') {
+            setAttendance(prev => {
+              const studentId = Object.keys(prev).find(
+                key => prev[key].recordId === payload.old.id
+              );
+              if (!studentId) return prev;
+
+              const newState = { ...prev };
+              delete newState[studentId];
+              return newState;
+            });
+            return;
+          }
+
+          setAttendance(prev => ({
+            ...prev,
+            [payload.new.student_id]: {
+              checkedIn: !!payload.new.check_in_time,
+              checkedOut: !!payload.new.check_out_time,
+              recordId: payload.new.id
+            }
+          }));
+        } catch (err) {
+          console.error('Error handling realtime update:', err);
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log('Subscription status:', status);
+      setIsConnected(status === 'SUBSCRIBED');
+    });
+
+  return () => {
+    console.log('Cleaning up subscription');
+    supabase.removeChannel(channel);
+  };
+}, [currentSession?.id]); // Only depend on the session ID
 
   if (loading) {
     return (
