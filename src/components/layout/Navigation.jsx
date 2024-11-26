@@ -1,3 +1,4 @@
+// src/components/layout/Navigation.jsx
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, Swords, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,13 +14,16 @@ export default function Navigation({ onMenuClick }) {
     { href: '/admin/students', label: 'Students' }
   ];
 
+  const handleLinkClick = (href) => {
+    toast.success(`Navigated to ${href}`);
+  };
+
   const handleLogout = async () => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
       toast.success('Logged out successfully');
-      window.location.href = '/';
     } catch (error) {
       toast.error('Error signing out');
       console.error('Error:', error);
@@ -42,7 +46,7 @@ export default function Navigation({ onMenuClick }) {
             
             <Link to="/admin" className="flex items-center gap-2 ml-4 lg:ml-0">
               <Swords className="h-8 w-8 text-blue-600" />
-              <span className="font-bold text-xl">Chess Club Admin</span>
+              <span className="font-bold text-xl">Chess Club</span>
             </Link>
           </div>
 
@@ -57,6 +61,7 @@ export default function Navigation({ onMenuClick }) {
                     ? 'bg-gray-100 text-gray-900' 
                     : 'text-gray-600 hover:bg-gray-50'
                 }`}
+                onClick={() => handleLinkClick(link.href)}
               >
                 {link.label}
               </Link>

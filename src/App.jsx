@@ -1,3 +1,4 @@
+// src/App.jsx
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import RootLayout from '@/components/layout/RootLayout';
@@ -15,7 +16,7 @@ export default function App() {
     <Router>
       <Routes>
         {/* Public routes */}
-        <Route index element={<PublicDashboard />} />
+        <Route path="/" element={<PublicDashboard />} />
         <Route path="/login" element={<Login />} />
 
         {/* Protected admin routes */}

@@ -1,3 +1,4 @@
+// src/components/layout/Sidebar.jsx
 import { Link, useLocation } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -6,10 +7,10 @@ export default function Sidebar({ open, onClose }) {
   const location = useLocation();
 
   const links = [
-    { href: '/', label: 'Dashboard' },
-    { href: '/registration', label: 'Registration' },
-    { href: '/tournaments', label: 'Tournaments' },
-    { href: '/students', label: 'Students' }
+    { href: '/admin', label: 'Dashboard' },
+    { href: '/admin/registration', label: 'Registration' },
+    { href: '/admin/tournaments', label: 'Tournaments' },
+    { href: '/admin/students', label: 'Students' }
   ];
 
   const handleLinkClick = (href) => {
@@ -23,13 +24,17 @@ export default function Sidebar({ open, onClose }) {
     >
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-gray-900/80 transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0'}`}
+        className={`fixed inset-0 bg-gray-900/80 transition-opacity duration-300 ${
+          open ? 'opacity-100' : 'opacity-0'
+        }`}
         onClick={onClose}
       />
 
       {/* Sidebar panel */}
       <div
-        className={`fixed inset-y-0 left-0 w-64 bg-white transform transition-transform duration-300 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 w-64 bg-white transform transition-transform duration-300 ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        }`}
       >
         {/* Close button */}
         <div className="flex h-16 items-center justify-between px-6 border-b">
@@ -49,7 +54,11 @@ export default function Sidebar({ open, onClose }) {
             <Link
               key={link.href}
               to={link.href}
-              className={`px-4 py-2 text-sm font-medium rounded-md ${location.pathname === link.href ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`px-4 py-2 text-sm font-medium rounded-md ${
+                location.pathname === link.href 
+                  ? 'bg-gray-100 text-gray-900' 
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
               onClick={() => handleLinkClick(link.href)}
             >
               {link.label}
