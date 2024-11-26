@@ -1,9 +1,7 @@
 // src/components/tabs/AttendanceTab.jsx
 import { Search, CheckCircle, Loader2, ChevronUp, ChevronDown, Wifi, WifiOff } from 'lucide-react';
 import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
+import { useState } from 'react';
 
 export default function AttendanceTab({
   students,
@@ -12,68 +10,12 @@ export default function AttendanceTab({
   setSearchQuery,
   toggleAttendance,
   loading,
-  connectionStatus
+  isConnected = true // Provide default value
 }) {
   const [sortConfig, setSortConfig] = useState({
     key: 'last_name',
     direction: 'asc'
   });
-  const [isConnected, setIsConnected] = useState(true);
-  
-  const ConnectionStatus = () => (
-    <div className="flex items-center gap-2">
-      {connectionStatus.isConnected ? (
-        <Wifi 
-          className="h-5 w-5 text-green-500" 
-          title="Real-time updates connected"
-        />
-      ) : (
-        <div className="flex items-center gap-2">
-          <WifiOff 
-            className="h-5 w-5 text-red-500" 
-            title={`Connection lost: ${connectionStatus.lastError}`}
-          />
-          {connectionStatus.reconnectAttempts > 0 && (
-            <span className="text-xs text-red-500">
-              Reconnecting... ({connectionStatus.reconnectAttempts})
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
-  // Set up real-time subscription
-  useEffect(() => {
-    const channel = supabase
-      .channel('attendance-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'attendance_records'
-        },
-        (payload) => {
-          console.log('Received real-time update:', payload);
-          // The parent component (ChessClubDashboard) should handle the attendance state updates
-          // This subscription is mainly for connection status
-        }
-      )
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-        setIsConnected(status === 'SUBSCRIBED');
-        if (status === 'SUBSCRIBED') {
-          toast.success('Real-time updates connected');
-        } else if (status === 'CLOSED') {
-          toast.error('Real-time updates disconnected');
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
 
   const requestSort = (key) => {
     setSortConfig(current => ({
@@ -134,7 +76,13 @@ export default function AttendanceTab({
                   ? "Today's Attendance"
                   : "Next Wednesday's Attendance"} ({displayDate})
               </h2>
-              <ConnectionStatus />
+              {typeof isConnected === 'boolean' && (
+                isConnected ? (
+                  <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
+                ) : (
+                  <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
+                )
+              )}
             </div>
             <div className="flex items-center gap-4 mt-2">
               <p className="text-sm text-gray-500">
