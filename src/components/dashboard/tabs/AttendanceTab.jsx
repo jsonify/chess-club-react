@@ -1,6 +1,9 @@
-import { Search, CheckCircle, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
+// src/components/tabs/AttendanceTab.jsx
+import { Search, CheckCircle, Loader2, ChevronUp, ChevronDown, Wifi, WifiOff } from 'lucide-react';
 import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 export default function AttendanceTab({
   students,
@@ -14,6 +17,39 @@ export default function AttendanceTab({
     key: 'last_name',
     direction: 'asc'
   });
+  const [isConnected, setIsConnected] = useState(true);
+
+  // Set up real-time subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('attendance-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'attendance_records'
+        },
+        (payload) => {
+          console.log('Received real-time update:', payload);
+          // The parent component (ChessClubDashboard) should handle the attendance state updates
+          // This subscription is mainly for connection status
+        }
+      )
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+        setIsConnected(status === 'SUBSCRIBED');
+        if (status === 'SUBSCRIBED') {
+          toast.success('Real-time updates connected');
+        } else if (status === 'CLOSED') {
+          toast.error('Real-time updates disconnected');
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const requestSort = (key) => {
     setSortConfig(current => ({
@@ -68,11 +104,18 @@ export default function AttendanceTab({
       <div className="p-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-lg font-medium">
-              {isWednesday(new Date())
-                ? "Today's Attendance"
-                : "Next Wednesday's Attendance"} ({displayDate})
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-medium">
+                {isWednesday(new Date())
+                  ? "Today's Attendance"
+                  : "Next Wednesday's Attendance"} ({displayDate})
+              </h2>
+              {isConnected ? (
+                <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
+              ) : (
+                <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
+              )}
+            </div>
             <div className="flex items-center gap-4 mt-2">
               <p className="text-sm text-gray-500">
                 Active Students: {students.length}
