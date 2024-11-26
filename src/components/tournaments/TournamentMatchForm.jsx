@@ -1,10 +1,13 @@
 // src/components/tournaments/TournamentMatchForm.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { formatDate } from '@/lib/utils';
 
 const TournamentMatchForm = () => {
   const [loading, setLoading] = useState(false);
+  const [students, setStudents] = useState([]);
   const [formData, setFormData] = useState({
     player1: '',
     player2: '',
@@ -20,32 +23,96 @@ const TournamentMatchForm = () => {
     { value: 'incomplete', label: 'Incomplete' }
   ];
 
-  // Calculate points based on result
-  const calculatePoints = (result) => {
-    switch (result) {
-      case 'player1_win':
-        return { player1: 1, player2: 0 };
-      case 'player2_win':
-        return { player1: 0, player2: 1 };
-      case 'draw':
-        return { player1: 0.5, player2: 0.5 };
-      default:
-        return { player1: 0, player2: 0 };
+  useEffect(() => {
+    loadActiveStudents();
+  }, []);
+
+  const loadActiveStudents = async () => {
+    try {
+      setLoading(true);
+      const today = new Date().toISOString().split('T')[0];
+
+      // Get today's attendance session
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('attendance_sessions')
+        .select('id')
+        .eq('session_date', today)
+        .single();
+
+      if (sessionError) throw sessionError;
+
+      // Get students who checked in today
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance_records')
+        .select(`
+          student_id,
+          students (
+            id,
+            first_name,
+            last_name,
+            grade
+          )
+        `)
+        .eq('session_id', sessionData.id)
+        .not('check_in_time', 'is', null);
+
+      if (attendanceError) throw attendanceError;
+
+      // Update students' active status
+      const checkedInStudentIds = attendanceData.map(record => record.student_id);
+      
+      if (checkedInStudentIds.length > 0) {
+        // Update status to active for checked-in students
+        const { error: updateError } = await supabase
+          .from('students')
+          .update({ status: 'active' })
+          .in('id', checkedInStudentIds);
+
+        if (updateError) throw updateError;
+      }
+
+      // Format students for dropdown
+      const formattedStudents = attendanceData.map(record => ({
+        id: record.students.id,
+        name: `${record.students.first_name} ${record.students.last_name} (Grade ${record.students.grade})`
+      }));
+
+      setStudents(formattedStudents);
+
+    } catch (error) {
+      console.error('Error loading active students:', error);
+      toast.error('Failed to load active students');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.player1 === formData.player2) {
+      toast.error('Players must be different');
+      return;
+    }
+
     setLoading(true);
 
     try {
       // Calculate points
       const points = calculatePoints(formData.result);
 
+      // Get current session
+      const today = new Date().toISOString().split('T')[0];
+      const { data: session } = await supabase
+        .from('attendance_sessions')
+        .select('id')
+        .eq('session_date', today)
+        .single();
+
       // Insert match record
       const { data: matchData, error: matchError } = await supabase
         .from('matches')
         .insert([{
+          session_id: session.id,
           player1_id: formData.player1,
           player2_id: formData.player2,
           result: formData.result,
@@ -76,6 +143,24 @@ const TournamentMatchForm = () => {
     }
   };
 
+  // Calculate points based on result
+  const calculatePoints = (result) => {
+    switch (result) {
+      case 'player1_win':
+        return { player1: 1, player2: 0 };
+      case 'player2_win':
+        return { player1: 0, player2: 1 };
+      case 'draw':
+        return { player1: 0.5, player2: 0.5 };
+      default:
+        return { player1: 0, player2: 0 };
+    }
+  };
+
+  const getFilteredPlayers = (currentPlayerId) => {
+    return students.filter(student => student.id !== currentPlayerId);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow">
       <h3 className="text-lg font-medium">Record New Match</h3>
@@ -92,7 +177,11 @@ const TournamentMatchForm = () => {
             required
           >
             <option value="">Select Player 1</option>
-            {/* We'll populate this with active students */}
+            {students.map(student => (
+              <option key={student.id} value={student.id}>
+                {student.name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -107,7 +196,11 @@ const TournamentMatchForm = () => {
             required
           >
             <option value="">Select Player 2</option>
-            {/* We'll populate this with active students */}
+            {getFilteredPlayers(formData.player1).map(student => (
+              <option key={student.id} value={student.id}>
+                {student.name}
+              </option>
+            ))}
           </select>
         </div>
 
