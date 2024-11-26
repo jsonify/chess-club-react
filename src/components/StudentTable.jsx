@@ -1,20 +1,22 @@
+// src/components/StudentTable.jsx
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Search, X, Phone, Mail } from 'lucide-react';
 
 export default function StudentTable({ students }) {
   const [sortConfig, setSortConfig] = useState({
-    key: 'first_name',
+    key: 'last_name',
     direction: 'asc'
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGrade, setFilterGrade] = useState('all');
+  const [showInactive, setShowInactive] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
 
   // Sort function
   const sortedStudents = [...students].sort((a, b) => {
     if (sortConfig.key === 'name') {
-      const nameA = `${a.first_name} ${a.last_name}`.toLowerCase();
-      const nameB = `${b.first_name} ${b.last_name}`.toLowerCase();
+      const nameA = `${a.last_name}, ${a.first_name}`.toLowerCase();
+      const nameB = `${b.last_name}, ${b.first_name}`.toLowerCase();
       return sortConfig.direction === 'asc' 
         ? nameA.localeCompare(nameB)
         : nameB.localeCompare(nameA);
@@ -39,7 +41,8 @@ export default function StudentTable({ students }) {
       student.contact2_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     const matchesGrade = filterGrade === 'all' || student.grade.toString() === filterGrade;
-    return matchesSearch && matchesGrade;
+    const matchesActive = showInactive || student.active;
+    return matchesSearch && matchesGrade && matchesActive;
   });
 
   const requestSort = (key) => {
@@ -177,18 +180,29 @@ export default function StudentTable({ students }) {
               className="pl-9 pr-4 py-2 border rounded-lg w-full sm:w-64"
             />
           </div>
-          <select
-            value={filterGrade}
-            onChange={(e) => setFilterGrade(e.target.value)}
-            className="border rounded-lg px-3 py-2"
-          >
-            <option value="all">All Grades</option>
-            {[2, 3, 4, 5, 6].map(grade => (
-              <option key={grade} value={grade.toString()}>
-                Grade {grade}
-              </option>
-            ))}
-          </select>
+          <div className="flex gap-4">
+            <select
+              value={filterGrade}
+              onChange={(e) => setFilterGrade(e.target.value)}
+              className="border rounded-lg px-3 py-2"
+            >
+              <option value="all">All Grades</option>
+              {[2, 3, 4, 5, 6].map(grade => (
+                <option key={grade} value={grade.toString()}>
+                  Grade {grade}
+                </option>
+              ))}
+            </select>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-600">Show Inactive</span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -240,7 +254,7 @@ export default function StudentTable({ students }) {
               >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
-                    {student.first_name} {student.last_name}
+                    {student.last_name}, {student.first_name}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
