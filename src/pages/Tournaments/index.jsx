@@ -1,26 +1,14 @@
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { Tabs, Tab, Box } from '@mui/material';
+import TournamentMatchForm from '@/components/tournaments/TournamentMatchForm';
+import TournamentStandings from '@/components/tournaments/TournamentStandings';
 import { MatchList } from '@/components/tournaments/MatchList';
-import { toast } from 'sonner';
 
 export default function TournamentsPage() {
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('standings');
 
-  const recordMatch = async (matchData) => {
-    try {
-      setLoading(true);
-      const { error } = await supabase
-        .from('matches')
-        .insert([matchData]);
-
-      if (error) throw error;
-      toast.success('Match recorded successfully');
-    } catch (error) {
-      console.error('Error recording match:', error);
-      toast.error('Failed to record match');
-    } finally {
-      setLoading(false);
-    }
+  const handleChange = (event, newValue) => {
+    setActiveTab(newValue);
   };
 
   return (
@@ -31,25 +19,36 @@ export default function TournamentsPage() {
             Chess Club Tournaments
           </h1>
           <p className="mt-2 text-sm text-gray-600">
-            Record matches and track tournament progress
+            Track matches, standings, and achievements
           </p>
         </header>
 
-        <div className="space-y-6">
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Record New Match
-            </h2>
-            {/* TODO: Add match recording form */}
-          </div>
+        <Box sx={{ width: '100%' }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tabs value={activeTab} onChange={handleChange}>
+              <Tab label="Standings" value="standings" />
+              <Tab label="Recent Matches" value="matches" />
+              <Tab label="Record Match" value="new" />
+            </Tabs>
+          </Box>
 
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Recent Matches
-            </h2>
-            <MatchList />
-          </div>
-        </div>
+          {activeTab === 'standings' && (
+            <TournamentStandings />
+          )}
+
+          {activeTab === 'matches' && (
+            <div className="bg-white shadow rounded-lg p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Recent Matches
+              </h2>
+              <MatchList />
+            </div>
+          )}
+
+          {activeTab === 'new' && (
+            <TournamentMatchForm />
+          )}
+        </Box>
       </div>
     </div>
   );

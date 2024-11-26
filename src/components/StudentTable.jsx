@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 
 export default function StudentTable({ students }) {
   const [sortConfig, setSortConfig] = useState({
-    key: 'last_name',
+    key: 'first_name',
     direction: 'asc'
   });
   const [searchTerm, setSearchTerm] = useState('');
@@ -12,8 +12,8 @@ export default function StudentTable({ students }) {
   // Sort function
   const sortedStudents = [...students].sort((a, b) => {
     if (sortConfig.key === 'name') {
-      const nameA = `${a.last_name}, ${a.first_name}`.toLowerCase();
-      const nameB = `${b.last_name}, ${b.first_name}`.toLowerCase();
+      const nameA = `${a.first_name} ${a.last_name}`.toLowerCase();
+      const nameB = `${b.first_name} ${b.last_name}`.toLowerCase();
       return sortConfig.direction === 'asc' 
         ? nameA.localeCompare(nameB)
         : nameB.localeCompare(nameA);
@@ -33,7 +33,9 @@ export default function StudentTable({ students }) {
     const matchesSearch = (
       student.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.teacher.toLowerCase().includes(searchTerm.toLowerCase())
+      student.teacher.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.contact1_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.contact2_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     const matchesGrade = filterGrade === 'all' || student.grade.toString() === filterGrade;
     return matchesSearch && matchesGrade;
@@ -121,10 +123,13 @@ export default function StudentTable({ students }) {
                   <SortIcon columnKey="teacher" />
                 </div>
               </th>
-              <th 
-                scope="col"
-                className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-              >
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Primary Contact
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Secondary Contact
+              </th>
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
             </tr>
@@ -134,7 +139,7 @@ export default function StudentTable({ students }) {
               <tr key={student.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
-                    {student.last_name}, {student.first_name}
+                    {student.first_name} {student.last_name}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -142,6 +147,18 @@ export default function StudentTable({ students }) {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">{student.teacher}</div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="text-sm">
+                    <div className="font-medium text-gray-900">{student.contact1_name}</div>
+                    <div className="text-gray-500">{student.contact1_phone}</div>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="text-sm">
+                    <div className="font-medium text-gray-900">{student.contact2_name}</div>
+                    <div className="text-gray-500">{student.contact2_phone}</div>
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

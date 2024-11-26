@@ -1,5 +1,6 @@
-import { Search, CheckCircle, Loader2 } from 'lucide-react';
+import { Search, CheckCircle, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
+import { useState } from 'react';
 
 export default function AttendanceTab({
   students,
@@ -9,6 +10,30 @@ export default function AttendanceTab({
   toggleAttendance,
   loading
 }) {
+  const [sortConfig, setSortConfig] = useState({
+    key: 'last_name',
+    direction: 'asc'
+  });
+
+  const requestSort = (key) => {
+    setSortConfig(current => ({
+      key,
+      direction: 
+        current.key === key && current.direction === 'asc' 
+          ? 'desc' 
+          : 'asc',
+    }));
+  };
+
+  const SortIcon = ({ columnKey }) => {
+    if (sortConfig.key !== columnKey) {
+      return <ChevronDown className="h-4 w-4 text-gray-400" />;
+    }
+    return sortConfig.direction === 'asc' 
+      ? <ChevronUp className="h-4 w-4 text-blue-500" />
+      : <ChevronDown className="h-4 w-4 text-blue-500" />;
+  };
+
   const targetDate = isWednesday(new Date()) ? new Date() : getNextWednesday();
   const displayDate = formatDate(targetDate);
 
@@ -20,7 +45,19 @@ export default function AttendanceTab({
     );
   }
 
-  const filteredStudents = students.filter(student =>
+  const sortedStudents = [...students].sort((a, b) => {
+    if (sortConfig.key === 'first_name') {
+      return sortConfig.direction === 'asc'
+        ? a.first_name.localeCompare(b.first_name)
+        : b.first_name.localeCompare(a.first_name);
+    }
+    // Default to last_name
+    return sortConfig.direction === 'asc'
+      ? a.last_name.localeCompare(b.last_name)
+      : b.last_name.localeCompare(a.last_name);
+  });
+
+  const filteredStudents = sortedStudents.filter(student =>
     student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -36,9 +73,27 @@ export default function AttendanceTab({
                 ? "Today's Attendance"
                 : "Next Wednesday's Attendance"} ({displayDate})
             </h2>
-            <p className="text-sm text-gray-500">
-              Active Students: {students.length}
-            </p>
+            <div className="flex items-center gap-4 mt-2">
+              <p className="text-sm text-gray-500">
+                Active Students: {students.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => requestSort('first_name')}
+                  className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-700"
+                >
+                  First Name
+                  <SortIcon columnKey="first_name" />
+                </button>
+                <button
+                  onClick={() => requestSort('last_name')}
+                  className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-700"
+                >
+                  Last Name
+                  <SortIcon columnKey="last_name" />
+                </button>
+              </div>
+            </div>
           </div>
           <div className="relative w-full sm:w-auto">
             <input
