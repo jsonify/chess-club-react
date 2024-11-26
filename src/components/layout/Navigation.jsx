@@ -7,15 +7,11 @@ export default function Navigation({ onMenuClick }) {
   const location = useLocation();
   
   const links = [
-    { href: '/', label: 'Dashboard' },
-    { href: '/registration', label: 'Registration' },
-    { href: '/tournaments', label: 'Tournaments' },
-    { href: '/students', label: 'Students' }
+    { href: '/admin', label: 'Dashboard' },
+    { href: '/admin/registration', label: 'Registration' },
+    { href: '/admin/tournaments', label: 'Tournaments' },
+    { href: '/admin/students', label: 'Students' }
   ];
-
-  const handleLinkClick = (href) => {
-    toast.success(`Navigated to ${href}`);
-  };
 
   const handleLogout = async () => {
     try {
@@ -23,8 +19,7 @@ export default function Navigation({ onMenuClick }) {
       if (error) throw error;
       
       toast.success('Logged out successfully');
-      // No need to navigate here as the ProtectedRoute component 
-      // will handle the redirect when the auth state changes
+      window.location.href = '/';
     } catch (error) {
       toast.error('Error signing out');
       console.error('Error:', error);
@@ -45,9 +40,9 @@ export default function Navigation({ onMenuClick }) {
               <Menu className="h-6 w-6" />
             </button>
             
-            <Link to="/" className="flex items-center gap-2 ml-4 lg:ml-0">
+            <Link to="/admin" className="flex items-center gap-2 ml-4 lg:ml-0">
               <Swords className="h-8 w-8 text-blue-600" />
-              <span className="font-bold text-xl">Chess Club</span>
+              <span className="font-bold text-xl">Chess Club Admin</span>
             </Link>
           </div>
 
@@ -62,7 +57,6 @@ export default function Navigation({ onMenuClick }) {
                     ? 'bg-gray-100 text-gray-900' 
                     : 'text-gray-600 hover:bg-gray-50'
                 }`}
-                onClick={() => handleLinkClick(link.href)}
               >
                 {link.label}
               </Link>
