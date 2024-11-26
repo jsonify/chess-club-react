@@ -1,6 +1,6 @@
 // src/components/attendance/RealTimeAttendance.jsx
 import { useState, useEffect } from 'react';
-import { Search, CheckCircle, Loader2, Wifi, WifiOff } from 'lucide-react';
+import { Search, CheckCircle, Loader2, Wifi, WifiOff, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -13,43 +13,13 @@ export default function RealTimeAttendance() {
   const [error, setError] = useState(null);
   const [currentSession, setCurrentSession] = useState(null);
   const [isConnected, setIsConnected] = useState(true);
+  const [sortConfig, setSortConfig] = useState({
+    key: 'first_name',
+    direction: 'asc'
+  });
 
   const targetDate = isWednesday(new Date()) ? new Date() : getNextWednesday();
   const formattedTargetDate = formatDate(targetDate);
-
-  // Initial data load
-  useEffect(() => {
-    loadInitialData();
-  }, [formattedTargetDate]);
-
-  // Set up real-time subscription
-  useEffect(() => {
-    // Subscribe to attendance_records table changes
-    const channel = supabase
-      .channel('attendance-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'attendance_records'
-        },
-        handleRealtimeUpdate
-      )
-      .subscribe((status) => {
-        setIsConnected(status === 'SUBSCRIBED');
-        if (status === 'SUBSCRIBED') {
-          toast.success('Real-time updates connected');
-        } else {
-          toast.error('Real-time updates disconnected');
-        }
-      });
-
-    // Cleanup subscription on unmount
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
 
   async function loadInitialData() {
     try {
@@ -133,7 +103,6 @@ export default function RealTimeAttendance() {
     try {
       console.log('Received real-time update:', payload);
       
-      // For deletions, we can update directly from the payload
       if (payload.eventType === 'DELETE') {
         setAttendance(prev => {
           const newState = { ...prev };
@@ -143,7 +112,6 @@ export default function RealTimeAttendance() {
         return;
       }
 
-      // For inserts and updates, fetch the complete record
       const { data: record, error } = await supabase
         .from('attendance_records')
         .select('*')
@@ -152,7 +120,6 @@ export default function RealTimeAttendance() {
 
       if (error) throw error;
 
-      // Update local state based on the event type
       setAttendance(prev => ({
         ...prev,
         [record.student_id]: {
@@ -188,21 +155,37 @@ export default function RealTimeAttendance() {
 
           if (deleteError) throw deleteError;
 
+          setAttendance(prev => {
+            const newState = { ...prev };
+            delete newState[studentId];
+            return newState;
+          });
+
         } else {
           // Create new check-in
-          const { error: insertError } = await supabase
+          const { data: record, error: insertError } = await supabase
             .from('attendance_records')
             .insert([{
               student_id: studentId,
               session_id: currentSession.id,
               check_in_time: new Date().toISOString()
-            }]);
+            }])
+            .select()
+            .single();
 
           if (insertError) throw insertError;
+
+          setAttendance(prev => ({
+            ...prev,
+            [studentId]: {
+              checkedIn: true,
+              checkedOut: false,
+              recordId: record.id
+            }
+          }));
         }
 
       } else if (action === 'checkout' && attendance[studentId]?.checkedIn) {
-        // Update check-out time
         const recordId = attendance[studentId].recordId;
         const { error: updateError } = await supabase
           .from('attendance_records')
@@ -212,6 +195,14 @@ export default function RealTimeAttendance() {
           .eq('id', recordId);
 
         if (updateError) throw updateError;
+
+        setAttendance(prev => ({
+          ...prev,
+          [studentId]: {
+            ...prev[studentId],
+            checkedOut: true
+          }
+        }));
       }
 
     } catch (err) {
@@ -220,11 +211,90 @@ export default function RealTimeAttendance() {
     }
   }
 
-  const filteredStudents = students.filter(student =>
-    student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    loadInitialData();
+  }, [formattedTargetDate]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('attendance-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'attendance_records'
+        },
+        handleRealtimeUpdate
+      )
+      .subscribe((status) => {
+        setIsConnected(status === 'SUBSCRIBED');
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const requestSort = (key) => {
+    setSortConfig(current => ({
+      key,
+      direction: 
+        current.key === key && current.direction === 'asc' 
+          ? 'desc' 
+          : 'asc',
+    }));
+  };
+
+  const SortIcon = ({ columnKey }) => {
+    if (sortConfig.key !== columnKey) {
+      return <ChevronDown className="h-4 w-4 text-gray-400" />;
+    }
+    return sortConfig.direction === 'asc' 
+      ? <ChevronUp className="h-4 w-4 text-blue-500" />
+      : <ChevronDown className="h-4 w-4 text-blue-500" />;
+  };
+
+  const getSortedStudents = () => {
+    const sorted = [...students].sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortConfig.key) {
+        case 'grade':
+          return sortConfig.direction === 'asc' 
+            ? a.grade - b.grade
+            : b.grade - a.grade;
+        case 'first_name':
+          aValue = a.first_name?.toLowerCase();
+          bValue = b.first_name?.toLowerCase();
+          break;
+        case 'last_name':
+          aValue = a.last_name?.toLowerCase();
+          bValue = b.last_name?.toLowerCase();
+          break;
+        case 'teacher':
+          aValue = a.teacher?.toLowerCase();
+          bValue = b.teacher?.toLowerCase();
+          break;
+        default:
+          aValue = a[sortConfig.key]?.toLowerCase();
+          bValue = b[sortConfig.key]?.toLowerCase();
+      }
+      
+      if (!aValue || !bValue) return 0;
+      
+      if (sortConfig.direction === 'asc') {
+        return aValue.localeCompare(bValue);
+      }
+      return bValue.localeCompare(aValue);
+    });
+
+    return sorted.filter(student =>
+      student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  };
 
   if (loading) {
     return (
@@ -259,9 +329,36 @@ export default function RealTimeAttendance() {
                 <WifiOff className="h-5 w-5 text-red-500" />
               )}
             </div>
-            <p className="text-gray-500 text-sm">
-              Showing {students.length} active students
-            </p>
+            <div className="flex items-center gap-4 mt-2">
+              <button
+                onClick={() => requestSort('first_name')}
+                className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-700"
+              >
+                First Name
+                <SortIcon columnKey="first_name" />
+              </button>
+              <button
+                onClick={() => requestSort('last_name')}
+                className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-700"
+              >
+                Last Name
+                <SortIcon columnKey="last_name" />
+              </button>
+              <button
+                onClick={() => requestSort('grade')}
+                className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-700"
+              >
+                Grade
+                <SortIcon columnKey="grade" />
+              </button>
+              <button
+                onClick={() => requestSort('teacher')}
+                className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-700"
+              >
+                Teacher
+                <SortIcon columnKey="teacher" />
+              </button>
+            </div>
           </div>
           <div className="relative w-full sm:w-auto">
             <input
@@ -277,7 +374,7 @@ export default function RealTimeAttendance() {
       </div>
 
       <div className="divide-y">
-        {filteredStudents.map(student => (
+        {getSortedStudents().map(student => (
           <div
             key={student.id}
             className={`flex items-center justify-between p-4 hover:bg-gray-50 ${

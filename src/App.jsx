@@ -3,10 +3,10 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import RootLayout from '@/components/layout/RootLayout';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
-import Dashboard from '@/pages/Dashboard';
-import Registration from '@/pages/Registration';
+import AttendanceView from '@/pages/AttendanceView';
 import Tournaments from '@/pages/Tournaments';
 import StudentDirectory from '@/pages/StudentDirectory';
+import Registration from '@/pages/Registration';
 import Login from '@/pages/Login';
 import NotFound from '@/pages/NotFound';
 import PublicDashboard from '@/pages/PublicDashboard';
@@ -22,10 +22,10 @@ export default function App() {
         {/* Protected admin routes */}
         <Route path="/admin" element={<ProtectedRoute />}>
           <Route element={<RootLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="registration" element={<Registration />} />
+            <Route index element={<AttendanceView />} />
             <Route path="tournaments" element={<Tournaments />} />
             <Route path="students" element={<StudentDirectory />} />
+            <Route path="registration" element={<Registration />} />
           </Route>
         </Route>
 

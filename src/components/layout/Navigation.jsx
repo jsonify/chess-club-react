@@ -8,10 +8,10 @@ export default function Navigation({ onMenuClick }) {
   const location = useLocation();
   
   const links = [
-    { href: '/admin', label: 'Dashboard' },
-    { href: '/admin/registration', label: 'Registration' },
+    { href: '/admin', label: 'Attendance' },
     { href: '/admin/tournaments', label: 'Tournaments' },
-    { href: '/admin/students', label: 'Students' }
+    { href: '/admin/students', label: 'Students' },
+    { href: '/admin/registration', label: 'Registration' }
   ];
 
   const handleLinkClick = (href) => {
@@ -83,3 +83,4 @@ export default function Navigation({ onMenuClick }) {
     </nav>
   );
 }
+
