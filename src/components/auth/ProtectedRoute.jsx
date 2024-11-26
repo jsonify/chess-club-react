@@ -1,12 +1,12 @@
-// src/components/auth/ProtectedRoute.jsx
 import { useEffect, useState } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Loader2 } from 'lucide-react';
 
 export default function ProtectedRoute() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
+  const location = useLocation();
 
   useEffect(() => {
     // Check current session
@@ -34,5 +34,10 @@ export default function ProtectedRoute() {
     );
   }
 
-  return session ? <Outlet /> : <Navigate to="/login" replace />;
+  if (!session) {
+    // Redirect to login page with the intended destination
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <Outlet />;
 }

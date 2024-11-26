@@ -1,54 +1,42 @@
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
-// Check for environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
-  // In development, show detailed error
-  if (import.meta.env.DEV) {
-    console.error('Missing Supabase environment variables:', {
-      url: supabaseUrl ? '✓' : '✗',
-      key: supabaseAnonKey ? '✓' : '✗'
-    });
-    throw new Error(
-      'Missing Supabase environment variables. Please check your .env file.'
-    );
-  } else {
-    // In production, show user-friendly error
-    toast.error('Unable to connect to database. Please contact support.');
-    console.error('Missing Supabase configuration');
-  }
+  console.error('Missing Supabase environment variables');
 }
 
-// Create Supabase client
-export const supabase = createClient(
-  supabaseUrl || '',  // Provide fallback to prevent TS errors
-  supabaseAnonKey || '', 
-  {
-    auth: {
-      persistSession: true,
-      storageKey: 'chess-club-auth'
-    }
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
+  auth: {
+    persistSession: true,
+    storageKey: 'chess-club-auth',
+    autoRefreshToken: true,
+    detectSessionInUrl: true
   }
-);
+});
 
-// Export project details for debugging
-export const SUPABASE_PROJECT = {
-  url: supabaseUrl?.replace(/\/$/, ''), // Remove trailing slash if present
-  isConfigured: Boolean(supabaseUrl && supabaseAnonKey)
+// Helper function to check if user is authenticated
+export const isAuthenticated = async () => {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    return !!session;
+  } catch (error) {
+    console.error('Auth check error:', error);
+    return false;
+  }
 };
 
-// Add connection status check
-export const checkConnection = async () => {
+// Helper function to get current session
+export const getCurrentSession = async () => {
   try {
-    const { error } = await supabase.from('students').select('id').limit(1);
+    const { data: { session }, error } = await supabase.auth.getSession();
     if (error) throw error;
-    return true;
+    return session;
   } catch (error) {
-    console.error('Supabase connection error:', error);
-    return false;
+    console.error('Session error:', error);
+    return null;
   }
 };

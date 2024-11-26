@@ -1,12 +1,12 @@
-// src/pages/Login.jsx
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,7 +15,7 @@ export default function Login() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate('/');
+        navigate('/admin');
       }
     });
   }, [navigate]);
@@ -35,7 +35,7 @@ export default function Login() {
 
       if (data.session) {
         toast.success('Logged in successfully');
-        navigate('/'); // Navigate to home page after successful login
+        navigate('/admin'); // Always navigate to /admin after successful login
       }
       
     } catch (error) {
