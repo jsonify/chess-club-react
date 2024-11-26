@@ -4,6 +4,7 @@ import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { Wifi, WifiOff } from 'lucide-react';
 
 export default function AttendanceTab({
   students,
@@ -11,13 +12,37 @@ export default function AttendanceTab({
   searchQuery,
   setSearchQuery,
   toggleAttendance,
-  loading
+  loading,
+  connectionStatus
 }) {
   const [sortConfig, setSortConfig] = useState({
     key: 'last_name',
     direction: 'asc'
   });
   const [isConnected, setIsConnected] = useState(true);
+  
+  const ConnectionStatus = () => (
+    <div className="flex items-center gap-2">
+      {connectionStatus.isConnected ? (
+        <Wifi 
+          className="h-5 w-5 text-green-500" 
+          title="Real-time updates connected"
+        />
+      ) : (
+        <div className="flex items-center gap-2">
+          <WifiOff 
+            className="h-5 w-5 text-red-500" 
+            title={`Connection lost: ${connectionStatus.lastError}`}
+          />
+          {connectionStatus.reconnectAttempts > 0 && (
+            <span className="text-xs text-red-500">
+              Reconnecting... ({connectionStatus.reconnectAttempts})
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   // Set up real-time subscription
   useEffect(() => {
@@ -110,11 +135,7 @@ export default function AttendanceTab({
                   ? "Today's Attendance"
                   : "Next Wednesday's Attendance"} ({displayDate})
               </h2>
-              {isConnected ? (
-                <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
-              ) : (
-                <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
-              )}
+              <ConnectionStatus />
             </div>
             <div className="flex items-center gap-4 mt-2">
               <p className="text-sm text-gray-500">
