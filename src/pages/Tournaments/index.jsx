@@ -1,3 +1,4 @@
+// src/pages/Tournaments/index.jsx
 import { useState } from 'react';
 import { Tabs, Tab, Box } from '@mui/material';
 import TournamentMatchForm from '@/components/tournaments/TournamentMatchForm';
