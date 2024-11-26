@@ -1,21 +1,20 @@
-// src/components/StudentTable.jsx
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, X, Phone, Mail } from 'lucide-react';
 
 export default function StudentTable({ students }) {
   const [sortConfig, setSortConfig] = useState({
-    key: 'last_name',
+    key: 'first_name',
     direction: 'asc'
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGrade, setFilterGrade] = useState('all');
-  const [showInactive, setShowInactive] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
 
   // Sort function
   const sortedStudents = [...students].sort((a, b) => {
     if (sortConfig.key === 'name') {
-      const nameA = `${a.last_name}, ${a.first_name}`.toLowerCase();
-      const nameB = `${b.last_name}, ${b.first_name}`.toLowerCase();
+      const nameA = `${a.first_name} ${a.last_name}`.toLowerCase();
+      const nameB = `${b.first_name} ${b.last_name}`.toLowerCase();
       return sortConfig.direction === 'asc' 
         ? nameA.localeCompare(nameB)
         : nameB.localeCompare(nameA);
@@ -35,11 +34,12 @@ export default function StudentTable({ students }) {
     const matchesSearch = (
       student.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.teacher.toLowerCase().includes(searchTerm.toLowerCase())
+      student.teacher.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.contact1_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.contact2_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     const matchesGrade = filterGrade === 'all' || student.grade.toString() === filterGrade;
-    const matchesActive = showInactive || student.active;
-    return matchesSearch && matchesGrade && matchesActive;
+    return matchesSearch && matchesGrade;
   });
 
   const requestSort = (key) => {
@@ -61,6 +61,108 @@ export default function StudentTable({ students }) {
       : <ChevronDown className="h-4 w-4 text-blue-500" />;
   };
 
+  const ContactModal = ({ student, onClose }) => {
+    if (!student) return null;
+
+    return (
+      <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+          {/* Modal Header */}
+          <div className="border-b px-6 py-4 flex items-center justify-between">
+            <h3 className="text-lg font-medium text-gray-900">
+              Student Contact Information
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-500"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+
+          {/* Modal Content */}
+          <div className="px-6 py-4">
+            {/* Student Info */}
+            <div className="mb-6">
+              <h4 className="text-xl font-medium text-gray-900">
+                {student.first_name} {student.last_name}
+              </h4>
+              <p className="text-sm text-gray-500">
+                Grade {student.grade} - {student.teacher}
+              </p>
+            </div>
+
+            {/* Primary Contact */}
+            <div className="mb-6">
+              <h5 className="text-sm font-medium text-gray-900 mb-2">
+                Primary Contact
+              </h5>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="font-medium">{student.contact1_name}</div>
+                <div className="text-sm text-gray-500">{student.contact1_relationship}</div>
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="h-4 w-4 text-gray-400" />
+                    <a href={`tel:${student.contact1_phone}`} className="text-blue-600 hover:underline">
+                      {student.contact1_phone}
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Mail className="h-4 w-4 text-gray-400" />
+                    <a href={`mailto:${student.contact1_email}`} className="text-blue-600 hover:underline">
+                      {student.contact1_email}
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Secondary Contact */}
+            {student.contact2_name && (
+              <div>
+                <h5 className="text-sm font-medium text-gray-900 mb-2">
+                  Secondary Contact
+                </h5>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="font-medium">{student.contact2_name}</div>
+                  <div className="text-sm text-gray-500">{student.contact2_relationship}</div>
+                  <div className="mt-2 space-y-1">
+                    {student.contact2_phone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="h-4 w-4 text-gray-400" />
+                        <a href={`tel:${student.contact2_phone}`} className="text-blue-600 hover:underline">
+                          {student.contact2_phone}
+                        </a>
+                      </div>
+                    )}
+                    {student.contact2_email && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Mail className="h-4 w-4 text-gray-400" />
+                        <a href={`mailto:${student.contact2_email}`} className="text-blue-600 hover:underline">
+                          {student.contact2_email}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Modal Footer */}
+          <div className="border-t px-6 py-4">
+            <button
+              onClick={onClose}
+              className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-200 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-white rounded-lg shadow">
       <div className="p-4 border-b border-gray-200">
@@ -75,29 +177,18 @@ export default function StudentTable({ students }) {
               className="pl-9 pr-4 py-2 border rounded-lg w-full sm:w-64"
             />
           </div>
-          <div className="flex gap-4">
-            <select
-              value={filterGrade}
-              onChange={(e) => setFilterGrade(e.target.value)}
-              className="border rounded-lg px-3 py-2"
-            >
-              <option value="all">All Grades</option>
-              {[2, 3, 4, 5, 6].map(grade => (
-                <option key={grade} value={grade.toString()}>
-                  Grade {grade}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={showInactive}
-                onChange={(e) => setShowInactive(e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-600">Show Inactive</span>
-            </label>
-          </div>
+          <select
+            value={filterGrade}
+            onChange={(e) => setFilterGrade(e.target.value)}
+            className="border rounded-lg px-3 py-2"
+          >
+            <option value="all">All Grades</option>
+            {[2, 3, 4, 5, 6].map(grade => (
+              <option key={grade} value={grade.toString()}>
+                Grade {grade}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -135,20 +226,21 @@ export default function StudentTable({ students }) {
                   <SortIcon columnKey="teacher" />
                 </div>
               </th>
-              <th 
-                scope="col"
-                className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-              >
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredStudents.map((student) => (
-              <tr key={student.id} className="hover:bg-gray-50">
+              <tr 
+                key={student.id} 
+                className="hover:bg-gray-50 cursor-pointer" 
+                onClick={() => setSelectedStudent(student)}
+              >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
-                    {student.last_name}, {student.first_name}
+                    {student.first_name} {student.last_name}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -183,6 +275,13 @@ export default function StudentTable({ students }) {
           Showing {filteredStudents.length} of {students.length} students
         </p>
       </div>
+
+      {selectedStudent && (
+        <ContactModal 
+          student={selectedStudent} 
+          onClose={() => setSelectedStudent(null)} 
+        />
+      )}
     </div>
   );
 }
