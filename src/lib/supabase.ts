@@ -1,25 +1,54 @@
 import { createClient } from '@supabase/supabase-js';
+import { toast } from 'sonner';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, ''); // Remove trailing slash if present
+// Check for environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  // In development, show detailed error
+  if (import.meta.env.DEV) {
+    console.error('Missing Supabase environment variables:', {
+      url: supabaseUrl ? '✓' : '✗',
+      key: supabaseAnonKey ? '✓' : '✗'
+    });
+    throw new Error(
+      'Missing Supabase environment variables. Please check your .env file.'
+    );
+  } else {
+    // In production, show user-friendly error
+    toast.error('Unable to connect to database. Please contact support.');
+    console.error('Missing Supabase configuration');
+  }
 }
 
-// Create a single instance of the Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    storageKey: 'chess-club-auth'  // Add unique storage key
+// Create Supabase client
+export const supabase = createClient(
+  supabaseUrl || '',  // Provide fallback to prevent TS errors
+  supabaseAnonKey || '', 
+  {
+    auth: {
+      persistSession: true,
+      storageKey: 'chess-club-auth'
+    }
   }
-});
-
-// Log initialization (but safer URL display)
-console.log('Supabase client initialized with project:', supabaseUrl.split('https://')[1].split('.')[0]);
+);
 
 // Export project details for debugging
 export const SUPABASE_PROJECT = {
-  url: supabaseUrl,
+  url: supabaseUrl?.replace(/\/$/, ''), // Remove trailing slash if present
   isConfigured: Boolean(supabaseUrl && supabaseAnonKey)
+};
+
+// Add connection status check
+export const checkConnection = async () => {
+  try {
+    const { error } = await supabase.from('students').select('id').limit(1);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Supabase connection error:', error);
+    return false;
+  }
 };
