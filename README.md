@@ -37,64 +37,79 @@ A web application for managing elementary school chess clubs, designed to stream
 - A Vercel account (free tier works fine)
 - Git installed on your local machine
 
-### Supabase Setup
+### Supabase Database Setup
 
 1. Create a new Supabase project at [supabase.com](https://supabase.com)
 
-2. Set up the database tables using the following SQL commands in the Supabase SQL editor:
+2. In your Supabase dashboard, go to the SQL Editor
 
-```sql
--- Students table
-create table students (
-  id uuid primary key default uuid_generate_v4(),
-  first_name text not null,
-  last_name text not null,
-  grade integer not null,
-  teacher text not null,
-  active boolean default true,
-  contact1_name text not null,
-  contact1_phone text not null,
-  contact1_email text not null,
-  contact1_relationship text not null,
-  contact2_name text,
-  contact2_phone text,
-  contact2_email text,
-  contact2_relationship text,
-  created_at timestamp with time zone default timezone('utc'::text, now())
-);
+3. Create a new query and paste the complete SQL setup script (available in `supabase/init.sql` in the repository)
+   - This script will:
+     - Create all necessary tables with proper constraints
+     - Set up indexes for performance optimization
+     - Enable Row Level Security (RLS)
+     - Create security policies
+     - Set up triggers for timestamp management
+     - Create useful views for statistics
 
--- Attendance tables
-create table attendance_sessions (
-  id uuid primary key default uuid_generate_v4(),
-  session_date date not null,
-  start_time time not null,
-  end_time time not null,
-  notes text
-);
+4. Configure Authentication:
+   - Go to Authentication > Settings
+   - Enable Email provider
+   - Disable Email confirmations for development (optional)
+   - Set up any additional auth providers as needed
 
-create table attendance_records (
-  id uuid primary key default uuid_generate_v4(),
-  student_id uuid references students(id),
-  session_id uuid references attendance_sessions(id),
-  check_in_time timestamp with time zone,
-  check_out_time timestamp with time zone,
-  missed_checkout boolean default false
-);
+5. Get Your API Keys:
+   - Go to Project Settings > API
+   - Copy the `anon` public key and URL
+   - Add these to your `.env` file:
+     ```
+     VITE_SUPABASE_URL=your_project_url
+     VITE_SUPABASE_ANON_KEY=your_anon_key
+     ```
 
--- Tournament table
-create table matches (
-  id uuid primary key default uuid_generate_v4(),
-  session_id uuid references attendance_sessions(id),
-  player1_id uuid references students(id),
-  player2_id uuid references students(id),
-  result text check (result in ('player1_win', 'player2_win', 'draw', 'incomplete')),
-  material_difference integer,
-  notes text,
-  created_at timestamp with time zone default timezone('utc'::text, now())
-);
-```
+6. Set up Storage Buckets (if needed):
+   - Go to Storage
+   - Create a new bucket called `avatars` (if you plan to add profile images)
+   - Set bucket public/private access as needed
 
-3. In your Supabase project settings, find your project URL and anon key under "API Settings"
+7. Verify Setup:
+   - Run the test query:
+     ```sql
+     select * from students;
+     select * from attendance_sessions;
+     ```
+   - You should see empty tables with the correct structure
+
+8. Optional: Import Sample Data
+   - Use the provided `sample_data.sql` script (if available in repository)
+   - Or manually add test data through the dashboard
+
+Note: Make sure to regularly backup your database using Supabase's backup features. You can find backup options in Project Settings > Database.
+
+For production deployments, review and possibly modify the RLS policies to match your security requirements.
+
+### Loading Sample Data
+
+To populate your database with sample data for testing:
+
+1. First ensure you've run the initialization script (`init.sql`)
+2. Go to the SQL Editor in your Supabase dashboard
+3. Open the sample data script (`supabase/sample_data.sql`)
+4. Run the script to populate your database with test data
+
+The sample data includes:
+- 12 students (10 active, 2 inactive)
+- Attendance records for the last 4 club meetings
+- Various chess matches with results
+- Achievement examples
+
+This data will let you test all features of the application including:
+- Attendance tracking
+- Tournament management
+- Student directory
+- Achievement tracking
+
+Note: Running the sample data script multiple times is safe - it will clear existing data before inserting new records.
 
 ### Application Setup
 
