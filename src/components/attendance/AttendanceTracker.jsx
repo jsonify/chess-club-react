@@ -1,101 +1,42 @@
-import { useState, useEffect } from 'react';
-import { CheckCircle, Search, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
+// src/components/attendance/AttendanceTracker.jsx
+import { useState } from 'react';
+import { Search, Loader2 } from 'lucide-react';
+import { useAttendance } from '@/hooks/useAttendance';
+import { AttendanceStatus } from './AttendanceStatus';
+import { AttendanceControls } from './AttendanceControls';
 import { toast } from 'sonner';
 
 export default function AttendanceTracker() {
-  const [students, setStudents] = useState([]);
-  const [attendance, setAttendance] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [debug, setDebug] = useState({});
+  const [filterGrade, setFilterGrade] = useState('all');
+  
+  const today = new Date();
+  const { 
+    loading, 
+    error, 
+    students, 
+    records, 
+    updateAttendance 
+  } = useAttendance(today);
 
-  const targetDate = isWednesday(new Date()) ? new Date() : getNextWednesday();
-  const formattedTargetDate = formatDate(targetDate);
-
-  useEffect(() => {
-    async function fetchStudents() {
-      try {
-        setLoading(true);
-        
-        // First, get ALL students to verify data
-        const { data: allStudents, error: allError } = await supabase
-          .from('students')
-          .select('*')
-          .order('grade')
-          .order('last_name');
-
-        console.log('All students:', {
-          count: allStudents?.length,
-          sample: allStudents?.[0],
-          activeCount: allStudents?.filter(s => s.active).length
-        });
-
-        if (allError) throw allError;
-
-        // Then get only active students
-        const { data: activeStudents, error: activeError } = await supabase
-          .from('students')
-          .select('*')
-          .eq('active', true)
-          .order('grade')
-          .order('last_name');
-
-        console.log('Active students:', {
-          count: activeStudents?.length,
-          sample: activeStudents?.[0]
-        });
-
-        if (activeError) throw activeError;
-
-        setStudents(activeStudents || []);
-        setDebug({
-          totalStudents: allStudents?.length,
-          activeStudents: activeStudents?.length,
-          hasActiveField: allStudents?.[0]?.hasOwnProperty('active'),
-          activeValues: [...new Set(allStudents?.map(s => s.active))]
-        });
-
-        // Get attendance session for target date
-        const { data: sessionData } = await supabase
-          .from('attendance_sessions')
-          .select('id')
-          .eq('session_date', formattedTargetDate)
-          .single();
-
-        console.log('Session data:', sessionData);
-
-        if (sessionData) {
-          const { data: attendanceData } = await supabase
-            .from('attendance_records')
-            .select('*')
-            .eq('session_id', sessionData.id);
-
-          console.log('Attendance data:', attendanceData);
-
-          const attendanceMap = {};
-          attendanceData?.forEach(record => {
-            attendanceMap[record.student_id] = {
-              checkedIn: !!record.check_in_time,
-              checkedOut: !!record.check_out_time
-            };
-          });
-          setAttendance(attendanceMap);
-        }
-
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError(err.message);
-        toast.error('Failed to load students');
-      } finally {
-        setLoading(false);
-      }
+  const handleStatusUpdate = async (studentId, status) => {
+    try {
+      await updateAttendance(studentId, status);
+      toast.success('Attendance updated successfully');
+    } catch (error) {
+      toast.error('Failed to update attendance');
     }
+  };
 
-    fetchStudents();
-  }, [formattedTargetDate]);
+  const filteredStudents = students.filter(student => {
+    const matchesSearch = (
+      student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    const matchesGrade = filterGrade === 'all' || student.grade.toString() === filterGrade;
+    return matchesSearch && matchesGrade;
+  });
 
   if (loading) {
     return (
@@ -108,11 +49,7 @@ export default function AttendanceTracker() {
   if (error) {
     return (
       <div className="p-4 bg-red-50 text-red-700 rounded-lg">
-        <h3 className="font-medium">Error loading data: {error}</h3>
-        <pre className="mt-2 text-xs overflow-auto">
-          Debug Info:
-          {JSON.stringify(debug, null, 2)}
-        </pre>
+        <h3 className="font-medium">Error loading attendance data: {error}</h3>
       </div>
     );
   }
@@ -121,41 +58,36 @@ export default function AttendanceTracker() {
     <div className="bg-white rounded-lg shadow">
       <div className="p-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-lg font-medium">
-              {isWednesday(new Date())
-                ? "Today's Attendance"
-                : "Next Wednesday's Attendance"} ({formattedTargetDate})
-            </h2>
-            <p className="text-gray-500 text-sm">
-              Showing {students.length} of {debug.totalStudents} students
-            </p>
-            {process.env.NODE_ENV === 'development' && (
-              <pre className="mt-2 text-xs text-gray-400">
-                Debug: {JSON.stringify(debug, null, 2)}
-              </pre>
-            )}
-          </div>
-          <div className="relative w-full sm:w-auto">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
               placeholder="Search students..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-2 border rounded-lg"
             />
-            <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
           </div>
+          <select
+            value={filterGrade}
+            onChange={(e) => setFilterGrade(e.target.value)}
+            className="border rounded-lg px-3 py-2"
+          >
+            <option value="all">All Grades</option>
+            {[2, 3, 4, 5, 6].map(grade => (
+              <option key={grade} value={grade.toString()}>
+                Grade {grade}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       <div className="divide-y">
-        {students.map(student => (
+        {filteredStudents.map(student => (
           <div
             key={student.id}
-            className={`flex items-center justify-between p-4 hover:bg-gray-50 ${
-              attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
-            }`}
+            className="flex items-center justify-between p-4 hover:bg-gray-50"
           >
             <div>
               <div className="font-medium text-gray-900">
@@ -164,37 +96,16 @@ export default function AttendanceTracker() {
               <div className="text-sm text-gray-500">
                 Grade {student.grade} - {student.teacher}
               </div>
-              {process.env.NODE_ENV === 'development' && (
-                <div className="text-xs text-gray-400">
-                  ID: {student.id}, Active: {String(student.active)}
-                </div>
-              )}
+              <div className="mt-1">
+                <AttendanceStatus 
+                  status={records[student.id]?.attendance_status} 
+                />
+              </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => toggleAttendance(student.id, 'checkin')}
-                className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                  attendance[student.id]?.checkedIn
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <CheckCircle className="h-4 w-4" />
-                <span>In</span>
-              </button>
-              <button
-                onClick={() => toggleAttendance(student.id, 'checkout')}
-                className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                  attendance[student.id]?.checkedOut
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                disabled={!attendance[student.id]?.checkedIn}
-              >
-                <CheckCircle className="h-4 w-4" />
-                <span>Out</span>
-              </button>
-            </div>
+            <AttendanceControls
+              currentStatus={records[student.id]?.attendance_status}
+              onUpdateStatus={(status) => handleStatusUpdate(student.id, status)}
+            />
           </div>
         ))}
       </div>

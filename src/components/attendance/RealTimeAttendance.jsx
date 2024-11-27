@@ -1,8 +1,81 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Search, CheckCircle, Loader2, Wifi, WifiOff, ChevronUp, ChevronDown } from 'lucide-react';
+// src/components/attendance/RealTimeAttendance.jsx
+import { useState, useEffect } from 'react';
+import { Search, CheckCircle, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { formatDate, formatDateForDB, getNextWednesday, isWednesday } from '@/lib/utils';
+import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
 import { toast } from 'sonner';
+
+async function fetchAttendance(sessionId) {
+  try {
+    // First fetch active students
+    const { data: students, error: studentsError } = await supabase
+      .from('students')
+      .select('*')
+      .eq('active', true)
+      .order('grade')
+      .order('last_name');
+
+    if (studentsError) throw studentsError;
+
+    // Then fetch attendance records for the session
+    const { data: attendanceRecords, error: attendanceError } = await supabase
+      .from('student_attendance')
+      .select('*')
+      .eq('session_id', sessionId);
+
+    if (attendanceError) throw attendanceError;
+
+    // Map attendance records by student ID
+    const attendanceMap = {};
+    attendanceRecords?.forEach(record => {
+      attendanceMap[record.student_id] = {
+        checkedIn: !!record.check_in_time,
+        checkedOut: !!record.check_out_time,
+        recordId: record.id
+      };
+    });
+
+    return {
+      students: students || [],
+      attendance: attendanceMap
+    };
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    throw error;
+  }
+}
+
+async function getOrCreateSession(date) {
+  const formattedDate = formatDate(date);
+  
+  try {
+    // Check for existing session
+    const { data: existingSession } = await supabase
+      .from('attendance_sessions')
+      .select('*')
+      .eq('session_date', formattedDate)
+      .single();
+
+    if (existingSession) return existingSession;
+
+    // Create new session
+    const { data: newSession, error } = await supabase
+      .from('attendance_sessions')
+      .insert([{
+        session_date: formattedDate,
+        start_time: '15:30',
+        end_time: '16:30'
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return newSession;
+  } catch (error) {
+    console.error('Error managing session:', error);
+    throw error;
+  }
+}
 
 export default function RealTimeAttendance() {
   const [students, setStudents] = useState([]);
@@ -12,253 +85,58 @@ export default function RealTimeAttendance() {
   const [error, setError] = useState(null);
   const [currentSession, setCurrentSession] = useState(null);
   const [isConnected, setIsConnected] = useState(true);
-  const [sortConfig, setSortConfig] = useState({
-    key: 'last_name',
-    direction: 'asc'
-  });
 
-  // Use useMemo to calculate the target date once
-  const targetDate = useMemo(() => {
-    const date = new Date();
-    return date.toISOString().split('T')[0]; // Always use YYYY-MM-DD format
+  useEffect(() => {
+    loadInitialData();
+
+    const channel = supabase
+      .channel('attendance-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'student_attendance'
+        },
+        handleAttendanceChange
+      )
+      .subscribe((status) => {
+        setIsConnected(status === 'SUBSCRIBED');
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const formattedTargetDate = formatDateForDB(targetDate);
-  const displayDate = formatDate(targetDate);
+  const handleAttendanceChange = (payload) => {
+    if (!currentSession) return;
 
-  const requestSort = (key) => {
-    setSortConfig(current => ({
-      key,
-      direction: 
-        current.key === key && current.direction === 'asc' 
-          ? 'desc' 
-          : 'asc',
-    }));
-  };
-
-  const SortIcon = ({ columnKey }) => {
-    if (sortConfig.key !== columnKey) {
-      return <ChevronDown className="h-4 w-4 text-gray-400" />;
-    }
-    return sortConfig.direction === 'asc' 
-      ? <ChevronUp className="h-4 w-4 text-blue-500" />
-      : <ChevronDown className="h-4 w-4 text-blue-500" />;
-  };
-
-  const getSortedStudents = () => {
-    const sorted = [...students].sort((a, b) => {
-      let aValue, bValue;
-
-      switch (sortConfig.key) {
-        case 'grade':
-          return sortConfig.direction === 'asc' 
-            ? a.grade - b.grade
-            : b.grade - a.grade;
-        case 'first_name':
-          aValue = a.first_name?.toLowerCase();
-          bValue = b.first_name?.toLowerCase();
-          break;
-        case 'last_name':
-          aValue = a.last_name?.toLowerCase();
-          bValue = b.last_name?.toLowerCase();
-          break;
-        case 'teacher':
-          aValue = a.teacher?.toLowerCase();
-          bValue = b.teacher?.toLowerCase();
-          break;
-        default:
-          aValue = a[sortConfig.key]?.toLowerCase();
-          bValue = b[sortConfig.key]?.toLowerCase();
-      }
-      
-      if (!aValue || !bValue) return 0;
-      return sortConfig.direction === 'asc'
-        ? aValue.localeCompare(bValue)
-        : bValue.localeCompare(aValue);
-    });
-
-    return sorted.filter(student =>
-      student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  };
-
-  async function getOrCreateSession(date) {
-    try {
-      // Ensure date is in YYYY-MM-DD format
-      const formattedDate = typeof date === 'string' ? date : date.toISOString().split('T')[0];
-      console.log('Querying for session date:', formattedDate);
-
-      // Use the formatted date in the query
-      const { data: existingSession, error: fetchError } = await supabase
-        .from('attendance_sessions')
-        .select('id, session_date')
-        .eq('session_date', formattedDate)
-        .single();
-
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('Fetch error:', fetchError);
-        throw fetchError;
-      }
-
-      if (existingSession) {
-        console.log('Found existing session:', existingSession);
-        return existingSession;
-      }
-
-      // Create new session with the same formatted date
-      const { data: newSession, error: createError } = await supabase
-        .from('attendance_sessions')
-        .insert([{
-          session_date: formattedDate,
-          start_time: '15:30',
-          end_time: '16:30'
-        }])
-        .select()
-        .single();
-
-      if (createError) {
-        console.error('Create error:', createError);
-        throw createError;
-      }
-
-      console.log('Created new session:', newSession);
-      return newSession;
-
-    } catch (err) {
-      console.error('Session management error:', err);
-      throw new Error(`Failed to manage session: ${err.message}`);
-    }
-  }
-
-  async function toggleAttendance(studentId, action) {
-    if (!currentSession) {
-      toast.error('No active session found');
-      return;
-    }
-
-    try {
-      // First check if a record already exists
-      const { data: existingRecord } = await supabase
-        .from('attendance_records')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('session_id', currentSession.id)
-        .single();
-
-      if (action === 'checkin') {
-        if (existingRecord?.check_in_time) {
-          // Remove check-in
-          const { error: deleteError } = await supabase
-            .from('attendance_records')
-            .delete()
-            .eq('id', existingRecord.id);
-
-          if (deleteError) throw deleteError;
-
-          // Update local state
-          setAttendance(prev => {
-            const newState = { ...prev };
-            delete newState[studentId];
-            return newState;
-          });
-        } else {
-          // Create or update check-in
-          const operation = existingRecord ? 'update' : 'insert';
-          const checkInData = {
-            student_id: studentId,
-            session_id: currentSession.id,
-            check_in_time: new Date().toISOString()
-          };
-
-          const { data: record, error: operationError } = await supabase
-            .from('attendance_records')
-            [operation === 'update' ? 'update' : 'insert'](
-              operation === 'update' 
-                ? { check_in_time: checkInData.check_in_time }
-                : checkInData
-            )
-            [operation === 'update' ? 'eq' : 'select'](...(operation === 'update' 
-              ? ['id', existingRecord.id]
-              : ['*']
-            ));
-
-          if (operationError) throw operationError;
-
-          // Update local state
-          setAttendance(prev => ({
-            ...prev,
-            [studentId]: {
-              checkedIn: true,
-              checkedOut: false,
-              recordId: operation === 'update' ? existingRecord.id : record[0].id
-            }
-          }));
+    if (payload.new && payload.new.session_id === currentSession.id) {
+      setAttendance(prev => ({
+        ...prev,
+        [payload.new.student_id]: {
+          checkedIn: !!payload.new.check_in_time,
+          checkedOut: !!payload.new.check_out_time,
+          recordId: payload.new.id
         }
-      } else if (action === 'checkout' && existingRecord) {
-        // Update checkout time
-        const { error: updateError } = await supabase
-          .from('attendance_records')
-          .update({ check_out_time: new Date().toISOString() })
-          .eq('id', existingRecord.id);
-
-        if (updateError) throw updateError;
-
-        // Update local state
-        setAttendance(prev => ({
-          ...prev,
-          [studentId]: {
-            ...prev[studentId],
-            checkedOut: true
-          }
-        }));
-      }
-    } catch (err) {
-      console.error('Error updating attendance:', err);
-      toast.error('Failed to update attendance');
+      }));
     }
-  }
+  };
 
-// First useEffect for initial data load
-useEffect(() => {
-  async function loadInitialData() {
+  const loadInitialData = async () => {
     try {
       setLoading(true);
+      
+      const targetDate = isWednesday(new Date()) ? new Date() : getNextWednesday();
       const session = await getOrCreateSession(targetDate);
       setCurrentSession(session);
 
-      // Load active students
-      const { data: activeStudents, error: studentsError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('active', true)
-        .order('grade')
-        .order('last_name');
+      const { students: loadedStudents, attendance: loadedAttendance } = 
+        await fetchAttendance(session.id);
 
-      if (studentsError) throw studentsError;
-      setStudents(activeStudents || []);
-
-      // Load attendance records
-      if (session) {
-        const { data: records, error: recordsError } = await supabase
-          .from('attendance_records')
-          .select('*')
-          .eq('session_id', session.id);
-
-        if (recordsError) throw recordsError;
-
-        const attendanceMap = {};
-        records?.forEach(record => {
-          attendanceMap[record.student_id] = {
-            checkedIn: !!record.check_in_time,
-            checkedOut: !!record.check_out_time,
-            recordId: record.id
-          };
-        });
-
-        setAttendance(attendanceMap);
-      }
+      setStudents(loadedStudents);
+      setAttendance(loadedAttendance);
     } catch (err) {
       console.error('Error loading data:', err);
       setError(err.message);
@@ -266,66 +144,130 @@ useEffect(() => {
     } finally {
       setLoading(false);
     }
-  }
-
-  loadInitialData();
-}, [targetDate]); // Only depend on targetDate
-
-// Second useEffect for real-time subscription
-useEffect(() => {
-  if (!currentSession) return; // Don't set up subscription without a session
-
-  console.log('Setting up real-time subscription for session:', currentSession.id);
-  
-  const channel = supabase
-    .channel(`attendance-changes-${currentSession.id}`) // Make channel name unique per session
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'attendance_records',
-        filter: `session_id=eq.${currentSession.id}` // Filter for current session only
-      },
-      async (payload) => {
-        try {
-          if (payload.eventType === 'DELETE') {
-            setAttendance(prev => {
-              const studentId = Object.keys(prev).find(
-                key => prev[key].recordId === payload.old.id
-              );
-              if (!studentId) return prev;
-
-              const newState = { ...prev };
-              delete newState[studentId];
-              return newState;
-            });
-            return;
-          }
-
-          setAttendance(prev => ({
-            ...prev,
-            [payload.new.student_id]: {
-              checkedIn: !!payload.new.check_in_time,
-              checkedOut: !!payload.new.check_out_time,
-              recordId: payload.new.id
-            }
-          }));
-        } catch (err) {
-          console.error('Error handling realtime update:', err);
-        }
-      }
-    )
-    .subscribe((status) => {
-      console.log('Subscription status:', status);
-      setIsConnected(status === 'SUBSCRIBED');
-    });
-
-  return () => {
-    console.log('Cleaning up subscription');
-    supabase.removeChannel(channel);
   };
-}, [currentSession?.id]); // Only depend on the session ID
+
+  const toggleCheckIn = async (studentId) => {
+    if (!currentSession) {
+      toast.error('No active session found');
+      return;
+    }
+
+    try {
+      const existingRecord = attendance[studentId];
+      
+      if (existingRecord?.checkedIn) {
+        // Remove check-in by deleting the record
+        const { error } = await supabase
+          .from('student_attendance')
+          .delete()
+          .eq('id', existingRecord.recordId);
+
+        if (error) throw error;
+
+        setAttendance(prev => {
+          const newState = { ...prev };
+          delete newState[studentId];
+          return newState;
+        });
+
+        toast.success('Check-in removed');
+      } else {
+        // Create new check-in record
+        const { data: record, error } = await supabase
+          .from('student_attendance')
+          .insert([{
+            session_id: currentSession.id,
+            student_id: studentId,
+            check_in_time: new Date().toISOString()
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setAttendance(prev => ({
+          ...prev,
+          [studentId]: {
+            checkedIn: true,
+            checkedOut: false,
+            recordId: record.id
+          }
+        }));
+
+        toast.success('Student checked in');
+      }
+    } catch (err) {
+      console.error('Error toggling check-in:', err);
+      toast.error('Failed to update attendance');
+    }
+  };
+
+  const toggleCheckOut = async (studentId) => {
+    if (!currentSession) {
+      toast.error('No active session found');
+      return;
+    }
+
+    const existingRecord = attendance[studentId];
+    if (!existingRecord?.checkedIn) {
+      toast.error('Student must be checked in first');
+      return;
+    }
+
+    try {
+      if (existingRecord.checkedOut) {
+        // Remove check-out by setting check_out_time to null
+        const { data: record, error } = await supabase
+          .from('student_attendance')
+          .update({ check_out_time: null })
+          .eq('id', existingRecord.recordId)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setAttendance(prev => ({
+          ...prev,
+          [studentId]: {
+            ...prev[studentId],
+            checkedOut: false
+          }
+        }));
+
+        toast.success('Check-out removed');
+      } else {
+        // Add check-out time
+        const { data: record, error } = await supabase
+          .from('student_attendance')
+          .update({ check_out_time: new Date().toISOString() })
+          .eq('id', existingRecord.recordId)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setAttendance(prev => ({
+          ...prev,
+          [studentId]: {
+            ...prev[studentId],
+            checkedOut: true
+          }
+        }));
+
+        toast.success('Student checked out');
+      }
+    } catch (err) {
+      console.error('Error toggling check-out:', err);
+      toast.error('Failed to update check-out status');
+    }
+  };
+
+  // Filter students based on search query
+  const filteredStudents = students.filter(student =>
+    student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   if (loading) {
     return (
@@ -338,14 +280,13 @@ useEffect(() => {
   if (error) {
     return (
       <div className="p-4 bg-red-50 text-red-700 rounded-lg">
-        <h3 className="font-medium">Error loading data: {error}</h3>
+        <h3 className="font-medium">Error loading attendance data: {error}</h3>
       </div>
     );
   }
 
   return (
     <div className="bg-white rounded-lg shadow">
-      {/* Header section */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -353,37 +294,17 @@ useEffect(() => {
               <h2 className="text-lg font-medium">
                 {isWednesday(new Date())
                   ? "Today's Attendance"
-                  : "Next Wednesday's Attendance"} ({displayDate})
+                  : "Next Wednesday's Attendance"} ({formatDate(currentSession?.session_date)})
               </h2>
               {isConnected ? (
-                <Wifi className="h-5 w-5 text-green-500" />
+                <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
               ) : (
-                <WifiOff className="h-5 w-5 text-red-500" />
+                <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
               )}
             </div>
-            <div className="flex items-center gap-4 mt-2">
-              <button
-                onClick={() => requestSort('first_name')}
-                className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-700"
-              >
-                First Name
-                <SortIcon columnKey="first_name" />
-              </button>
-              <button
-                onClick={() => requestSort('last_name')}
-                className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-700"
-              >
-                Last Name
-                <SortIcon columnKey="last_name" />
-              </button>
-              <button
-                onClick={() => requestSort('grade')}
-                className="text-sm text-gray-500 flex items-center gap-1 hover:text-gray-700"
-              >
-                Grade
-                <SortIcon columnKey="grade" />
-              </button>
-            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              Showing {filteredStudents.length} students
+            </p>
           </div>
           <div className="relative w-full sm:w-auto">
             <input
@@ -398,9 +319,8 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Student list */}
       <div className="divide-y">
-        {getSortedStudents().map(student => (
+        {filteredStudents.map(student => (
           <div
             key={student.id}
             className={`flex items-center justify-between p-4 hover:bg-gray-50 ${
@@ -417,7 +337,7 @@ useEffect(() => {
             </div>
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => toggleAttendance(student.id, 'checkin')}
+                onClick={() => toggleCheckIn(student.id)}
                 className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
                   attendance[student.id]?.checkedIn
                     ? 'bg-green-100 text-green-700'
@@ -428,7 +348,7 @@ useEffect(() => {
                 <span>In</span>
               </button>
               <button
-                onClick={() => toggleAttendance(student.id, 'checkout')}
+                onClick={() => toggleCheckOut(student.id)}
                 className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
                   attendance[student.id]?.checkedOut
                     ? 'bg-green-100 text-green-700'
@@ -442,6 +362,11 @@ useEffect(() => {
             </div>
           </div>
         ))}
+        {filteredStudents.length === 0 && (
+          <div className="p-4 text-center text-gray-500">
+            No students found matching your search
+          </div>
+        )}
       </div>
     </div>
   );

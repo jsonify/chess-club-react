@@ -1,110 +1,113 @@
 // src/lib/attendanceHelpers.js
-export const handleCheckIn = async (supabase, studentId, currentSession, attendance) => {
-    const isCheckedIn = attendance[studentId]?.checkedIn;
-  
-    if (isCheckedIn) {
-      // Remove check-in
-      const recordId = attendance[studentId].recordId;
-      const { error: deleteError } = await supabase
-        .from('attendance_records')
-        .delete()
-        .eq('id', recordId);
-  
-      if (deleteError) throw deleteError;
-  
-      return {
-        type: 'remove',
-        studentId
-      };
-    } else {
-      // Create new check-in
-      const { data: record, error: insertError } = await supabase
-        .from('attendance_records')
-        .insert([{
-          student_id: studentId,
-          session_id: currentSession.id,
-          check_in_time: new Date().toISOString()
-        }])
+import { supabase } from './supabase';
+
+export async function fetchStudentsWithAttendance(sessionId) {
+  try {
+    // First, get all active students
+    const { data: students, error: studentsError } = await supabase
+      .from('students')
+      .select('*')
+      .eq('active', true)
+      .order('grade')
+      .order('last_name');
+
+    if (studentsError) throw studentsError;
+
+    // Then get attendance records for the session
+    const { data: attendanceRecords, error: attendanceError } = await supabase
+      .from('student_attendance')
+      .select('*')
+      .eq('session_id', sessionId);
+
+    if (attendanceError) throw attendanceError;
+
+    // Create a map of attendance records by student ID
+    const attendanceMap = (attendanceRecords || []).reduce((acc, record) => {
+      acc[record.student_id] = record;
+      return acc;
+    }, {});
+
+    // Return both students and their attendance records
+    return {
+      students: students || [],
+      attendance: attendanceMap
+    };
+  } catch (error) {
+    console.error('Error fetching students with attendance:', error);
+    throw error;
+  }
+}
+
+export async function getOrCreateSession(date) {
+  const formattedDate = date.toISOString().split('T')[0];
+
+  try {
+    // Check for existing session
+    const { data: existingSession } = await supabase
+      .from('attendance_sessions')
+      .select('*')
+      .eq('session_date', formattedDate)
+      .single();
+
+    if (existingSession) return existingSession;
+
+    // Create new session
+    const { data: newSession, error } = await supabase
+      .from('attendance_sessions')
+      .insert([{
+        session_date: formattedDate,
+        start_time: '15:30',
+        end_time: '16:30'
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return newSession;
+  } catch (error) {
+    console.error('Error managing session:', error);
+    throw error;
+  }
+}
+
+export async function updateAttendanceRecord(sessionId, studentId, status) {
+  try {
+    // Check for existing record
+    const { data: existingRecord } = await supabase
+      .from('student_attendance')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('student_id', studentId)
+      .single();
+
+    if (existingRecord) {
+      // Update existing record
+      const { data: updatedRecord, error } = await supabase
+        .from('student_attendance')
+        .update({ attendance_status: status })
+        .eq('id', existingRecord.id)
         .select()
         .single();
-  
-      if (insertError) throw insertError;
-  
-      return {
-        type: 'checkin',
-        studentId,
-        recordId: record.id
-      };
+
+      if (error) throw error;
+      return updatedRecord;
     }
-  };
-  
-  export const handleCheckOut = async (supabase, studentId, recordId) => {
-    const { error: updateError } = await supabase
-      .from('attendance_records')
-      .update({
-        check_out_time: new Date().toISOString()
-      })
-      .eq('id', recordId);
-  
-    if (updateError) throw updateError;
-  
-    return {
-      type: 'checkout',
-      studentId
-    };
-  };
-  
-  // Update the attendance state based on action results
-  export const updateAttendanceState = (prevState, action) => {
-    switch (action.type) {
-      case 'remove':
-        const newState = { ...prevState };
-        delete newState[action.studentId];
-        return newState;
-  
-      case 'checkin':
-        return {
-          ...prevState,
-          [action.studentId]: {
-            checkedIn: true,
-            checkedOut: false,
-            recordId: action.recordId
-          }
-        };
-  
-      case 'checkout':
-        return {
-          ...prevState,
-          [action.studentId]: {
-            ...prevState[action.studentId],
-            checkedOut: true
-          }
-        };
-  
-      default:
-        return prevState;
-    }
-  };
-  
-  export const updateStatsState = (prevStats, action, totalStudents) => {
-    switch (action.type) {
-      case 'remove':
-        const newPresentCount = Math.max(0, prevStats.presentToday - 1);
-        return {
-          ...prevStats,
-          presentToday: newPresentCount,
-          attendanceRate: Math.round((newPresentCount / totalStudents) * 100)
-        };
-  
-      case 'checkin':
-        const increasedCount = prevStats.presentToday + 1;
-        return {
-          ...prevStats,
-          presentToday: increasedCount,
-          attendanceRate: Math.round((increasedCount / totalStudents) * 100)
-        };
-  
-      default:
-        return prevStats;
-    }
-  };
+
+    // Create new record
+    const { data: newRecord, error } = await supabase
+      .from('student_attendance')
+      .insert([{
+        session_id: sessionId,
+        student_id: studentId,
+        attendance_status: status
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return newRecord;
+  } catch (error) {
+    console.error('Error updating attendance record:', error);
+    throw error;
+  }
+}
