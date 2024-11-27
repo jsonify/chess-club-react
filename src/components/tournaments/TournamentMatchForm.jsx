@@ -31,54 +31,63 @@ const TournamentMatchForm = () => {
     try {
       setLoading(true);
       const today = new Date().toISOString().split('T')[0];
-
-      // Get today's attendance session
+  
+      console.log('Today:', today);
+  
+      // Get today's session
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
-        .select('id')
+        .select('*')
         .eq('session_date', today)
         .single();
-
-      if (sessionError) throw sessionError;
-
-      // Get students who checked in today
+  
+      if (sessionError) {
+        console.error('Session Error:', sessionError);
+        throw sessionError;
+      }
+  
+      console.log('Session Data:', sessionData);
+  
+      // Get students who are checked in for today's session
       const { data: attendanceData, error: attendanceError } = await supabase
-        .from('attendance_records')
+        .from('student_attendance')
         .select(`
+          id,
           student_id,
+          check_in_time,
+          check_out_time,
           students (
             id,
             first_name,
             last_name,
-            grade
+            grade,
+            teacher
           )
         `)
         .eq('session_id', sessionData.id)
-        .not('check_in_time', 'is', null);
-
-      if (attendanceError) throw attendanceError;
-
-      // Update students' active status
-      const checkedInStudentIds = attendanceData.map(record => record.student_id);
-      
-      if (checkedInStudentIds.length > 0) {
-        // Update status to active for checked-in students
-        const { error: updateError } = await supabase
-          .from('students')
-          .update({ status: 'active' })
-          .in('id', checkedInStudentIds);
-
-        if (updateError) throw updateError;
+        .not('check_in_time', 'is', null)
+        .is('check_out_time', null);
+  
+      if (attendanceError) {
+        console.error('Attendance Error:', attendanceError);
+        throw attendanceError;
       }
-
+  
+      console.log('Attendance Data:', attendanceData);
+  
       // Format students for dropdown
-      const formattedStudents = attendanceData.map(record => ({
-        id: record.students.id,
-        name: `${record.students.first_name} ${record.students.last_name} (Grade ${record.students.grade})`
-      }));
-
+      const formattedStudents = attendanceData
+        .filter(record => record.students) // Ensure we have valid student data
+        .map(record => ({
+          id: record.students.id,
+          name: `${record.students.first_name} ${record.students.last_name} (Grade ${record.students.grade})`
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+  
+      console.log('Formatted Students:', formattedStudents);
+  
       setStudents(formattedStudents);
-
+  
     } catch (error) {
       console.error('Error loading active students:', error);
       toast.error('Failed to load active students');
@@ -97,9 +106,6 @@ const TournamentMatchForm = () => {
     setLoading(true);
 
     try {
-      // Calculate points
-      const points = calculatePoints(formData.result);
-
       // Get current session
       const today = new Date().toISOString().split('T')[0];
       const { data: session } = await supabase
@@ -117,9 +123,7 @@ const TournamentMatchForm = () => {
           player2_id: formData.player2,
           result: formData.result,
           material_difference: formData.materialDiff,
-          notes: formData.notes,
-          points_player1: points.player1,
-          points_player2: points.player2
+          notes: formData.notes
         }])
         .select()
         .single();
@@ -140,20 +144,6 @@ const TournamentMatchForm = () => {
       toast.error('Failed to record match');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Calculate points based on result
-  const calculatePoints = (result) => {
-    switch (result) {
-      case 'player1_win':
-        return { player1: 1, player2: 0 };
-      case 'player2_win':
-        return { player1: 0, player2: 1 };
-      case 'draw':
-        return { player1: 0.5, player2: 0.5 };
-      default:
-        return { player1: 0, player2: 0 };
     }
   };
 
@@ -194,6 +184,7 @@ const TournamentMatchForm = () => {
             onChange={(e) => setFormData(prev => ({ ...prev, player2: e.target.value }))}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             required
+            disabled={!formData.player1}
           >
             <option value="">Select Player 2</option>
             {getFilteredPlayers(formData.player1).map(student => (
