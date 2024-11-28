@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
 import { getOrCreateSession } from '@/lib/attendanceHelpers';
 import { toast } from 'sonner';
+import StudentAttendanceCard from './StudentAttendanceCard';
 
 export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   const [students, setStudents] = useState([]);
@@ -57,7 +58,7 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     });
   }, [students, searchQuery, filterGrade, sortConfig]);
 
-  // Calculate stats using the filtered students
+  // Calculate stats
   const stats = useMemo(() => {
     const presentCount = Object.values(attendance).filter(record => record.checkedIn).length;
     return {
@@ -67,23 +68,6 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     };
   }, [students.length, attendance]);
 
-  const requestSort = (key) => {
-    setSortConfig(current => ({
-      key,
-      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
-    }));
-  };
-
-  const SortIcon = ({ columnKey }) => {
-    if (sortConfig.key !== columnKey) {
-      return <ChevronDown className="inline h-4 w-4 text-gray-400" />;
-    }
-    return sortConfig.direction === 'asc' 
-      ? <ChevronUp className="inline h-4 w-4 text-gray-700" />
-      : <ChevronDown className="inline h-4 w-4 text-gray-700" />;
-  };
-
-  // Notify parent of stats changes
   useEffect(() => {
     onStatsChange(stats);
   }, [stats, onStatsChange]);
@@ -111,22 +95,11 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     };
   }, []);
 
-  // Filter students based on search query
-  const filteredStudents = useMemo(() => 
-    students.filter(student =>
-      student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
-    ),
-    [students, searchQuery]
-  );
-  // Modify loadInitialData to set state in the correct order
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      console.log('Loading initial data');
-  
-      // Get ALL students without any filters
+        
+      // Remove the .eq('active', true) filter to get ALL students
       const { data: allStudents, error: studentsError } = await supabase
         .from('students')
         .select('*')
@@ -135,12 +108,9 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   
       if (studentsError) throw studentsError;
   
-      // Get session immediately after students
-      const today = new Date();
       const session = await getOrCreateSession(today);
       setCurrentSession(session);
   
-      // Get attendance records
       const { data: attendanceRecords, error: attendanceError } = await supabase
         .from('attendance_records')
         .select('*')
@@ -148,7 +118,6 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   
       if (attendanceError) throw attendanceError;
   
-      // Process attendance records
       const attendanceMap = {};
       attendanceRecords?.forEach(record => {
         attendanceMap[record.student_id] = {
@@ -158,48 +127,73 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
         };
       });
   
-      // Important: Set both states at once to prevent multiple rerenders
       setStudents(allStudents || []);
       setAttendance(attendanceMap);
   
     } catch (err) {
       console.error('Error loading data:', err);
       setError(err.message);
-      toast.error('Failed to load data');
+      toast.error('Failed to load attendance data');
     } finally {
       setLoading(false);
     }
   };
-  
-  // Update the toggleCheckIn function to handle stats correctly
+
+  const handleRealtimeUpdate = (payload) => {
+    if (!currentSession) return;
+
+    try {
+      if (payload.eventType === 'DELETE') {
+        setAttendance(prev => {
+          const studentId = Object.keys(prev).find(
+            key => prev[key].recordId === payload.old.id
+          );
+          if (!studentId) return prev;
+
+          const newState = { ...prev };
+          delete newState[studentId];
+          return newState;
+        });
+      } else if (payload.new.session_id === currentSession.id) {
+        setAttendance(prev => ({
+          ...prev,
+          [payload.new.student_id]: {
+            checkedIn: !!payload.new.check_in_time,
+            checkedOut: !!payload.new.check_out_time,
+            recordId: payload.new.id
+          }
+        }));
+      }
+    } catch (err) {
+      console.error('Error handling realtime update:', err);
+    }
+  };
+
   const toggleCheckIn = async (studentId) => {
     if (!currentSession) {
       toast.error('No active session found');
       return;
     }
-  
+
     try {
       const existingRecord = attendance[studentId];
       
       if (existingRecord?.checkedIn) {
-        // Remove check-in
         const { error: deleteError } = await supabase
           .from('attendance_records')
           .delete()
           .eq('id', existingRecord.recordId);
-  
+
         if (deleteError) throw deleteError;
-  
-        // Update attendance state directly
+
         setAttendance(prev => {
           const newState = { ...prev };
           delete newState[studentId];
           return newState;
         });
-  
+
         toast.success('Check-in removed');
       } else {
-        // Create new check-in
         const { data: record, error: insertError } = await supabase
           .from('attendance_records')
           .insert([{
@@ -209,10 +203,9 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
           }])
           .select()
           .single();
-  
+
         if (insertError) throw insertError;
-  
-        // Update attendance state directly
+
         setAttendance(prev => ({
           ...prev,
           [studentId]: {
@@ -221,7 +214,7 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
             recordId: record.id
           }
         }));
-  
+
         toast.success('Student checked in');
       }
     } catch (err) {
@@ -243,13 +236,9 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     }
 
     try {
-      console.log('Toggling check-out for student:', studentId);
-
       const { error: updateError } = await supabase
         .from('attendance_records')
-        .update({ 
-          check_out_time: new Date().toISOString() 
-        })
+        .update({ check_out_time: new Date().toISOString() })
         .eq('id', existingRecord.recordId);
 
       if (updateError) throw updateError;
@@ -269,43 +258,20 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     }
   };
 
-  const handleRealtimeUpdate = (payload) => {
-    if (!currentSession) return;
+  const requestSort = (key) => {
+    setSortConfig(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
 
-    console.log('Realtime update received:', payload);
-
-    try {
-      if (payload.eventType === 'DELETE') {
-        console.log('Processing delete event');
-        setAttendance(prev => {
-          const studentId = Object.keys(prev).find(
-            key => prev[key].recordId === payload.old.id
-          );
-          if (!studentId) return prev;
-
-          const newState = { ...prev };
-          delete newState[studentId];
-          console.log('New state after delete:', newState);
-          return newState;
-        });
-      } else if (payload.new.session_id === currentSession.id) {
-        console.log('Processing update/insert event');
-        setAttendance(prev => {
-          const newState = {
-            ...prev,
-            [payload.new.student_id]: {
-              checkedIn: !!payload.new.check_in_time,
-              checkedOut: !!payload.new.check_out_time,
-              recordId: payload.new.id
-            }
-          };
-          console.log('New state after update:', newState);
-          return newState;
-        });
-      }
-    } catch (err) {
-      console.error('Error handling realtime update:', err);
+  const SortIcon = ({ columnKey }) => {
+    if (sortConfig.key !== columnKey) {
+      return <ChevronDown className="inline h-4 w-4 text-gray-400" />;
     }
+    return sortConfig.direction === 'asc' 
+      ? <ChevronUp className="inline h-4 w-4 text-gray-700" />
+      : <ChevronDown className="inline h-4 w-4 text-gray-700" />;
   };
 
   if (loading) {
@@ -369,73 +335,75 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort('first_name')}
-              >
-                First Name <SortIcon columnKey="first_name" />
-              </th>
-              <th 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort('last_name')}
-              >
-                Last Name <SortIcon columnKey="last_name" />
-              </th>
-              <th 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort('grade')}
-              >
-                Grade <SortIcon columnKey="grade" />
-              </th>
-              <th 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort('teacher')}
-              >
-                Teacher <SortIcon columnKey="teacher" />
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Attendance
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredAndSortedStudents.map((student) => (
-              <tr
-                key={student.id}
-                className={`hover:bg-gray-50 ${
-                  attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
-                }`}
-              >
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">
-                    {student.first_name}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">
-                    {student.last_name}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{student.grade}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{student.teacher}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right">
-                  <div className="flex items-center justify-end space-x-4">
-                    <button
-                      onClick={() => toggleCheckIn(student.id)}
-                      className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                        attendance[student.id]?.checkedIn
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
+      <div>
+        {/* Desktop view */}
+        <div className="hidden md:block">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort('first_name')}
+                >
+                  First Name <SortIcon columnKey="first_name" />
+                </th>
+                <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort('last_name')}
+                >
+                  Last Name <SortIcon columnKey="last_name" />
+                </th>
+                <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort('grade')}
+                >
+                  Grade <SortIcon columnKey="grade" />
+                </th>
+                <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort('teacher')}
+                >
+                  Teacher <SortIcon columnKey="teacher" />
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Attendance
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredAndSortedStudents.map((student) => (
+                <tr
+                  key={student.id}
+                  className={`hover:bg-gray-50 ${
+                    attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {student.first_name}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {student.last_name}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{student.grade}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{student.teacher}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <div className="flex items-center justify-end space-x-4">
+                      <button
+                        onClick={() => toggleCheckIn(student.id)}
+                        className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                          attendance[student.id]?.checkedIn
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
                       <CheckCircle className="h-4 w-4" />
                       <span>In</span>
                     </button>
@@ -458,6 +426,26 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
           </tbody>
         </table>
       </div>
+
+      {/* Mobile view */}
+      <div className="md:hidden p-4 space-y-4">
+        {filteredAndSortedStudents.map((student) => (
+          <StudentAttendanceCard
+            key={student.id}
+            student={student}
+            attendance={attendance[student.id]}
+            onCheckIn={toggleCheckIn}
+            onCheckOut={toggleCheckOut}
+          />
+        ))}
+        
+        {filteredAndSortedStudents.length === 0 && (
+          <div className="text-center py-6 text-gray-500">
+            No students found matching your search criteria
+          </div>
+        )}
+      </div>
     </div>
-  );
+  </div>
+);
 }
