@@ -1,10 +1,13 @@
+// src/components/tournaments/TournamentStandings.jsx
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Trophy, Users, Target, Award } from 'lucide-react';
+import { Trophy, Users, Target, Award, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
-const TournamentStandings = () => {
+export default function TournamentStandings() {
   const [standings, setStandings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchStandings();
@@ -27,8 +30,8 @@ const TournamentStandings = () => {
     try {
       setLoading(true);
       
-      // Fetch all matches with player details
-      const { data: matches, error } = await supabase
+      // Fetch matches with player details
+      const { data: matches, error: matchesError } = await supabase
         .from('matches')
         .select(`
           *,
@@ -37,7 +40,7 @@ const TournamentStandings = () => {
         `)
         .not('result', 'eq', 'incomplete');
 
-      if (error) throw error;
+      if (matchesError) throw matchesError;
 
       // Process matches to calculate statistics
       const playerStats = {};
@@ -111,17 +114,47 @@ const TournamentStandings = () => {
       setStandings(standingsData);
     } catch (error) {
       console.error('Error fetching standings:', error);
+      setError('Failed to load tournament standings');
+      toast.error('Failed to load tournament standings');
     } finally {
       setLoading(false);
     }
   };
 
+  const StatCard = ({ icon: Icon, label, value }) => (
+    <div className="bg-white overflow-hidden shadow rounded-lg">
+      <div className="p-5">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <Icon className="h-6 w-6 text-gray-400" />
+          </div>
+          <div className="ml-5 w-0 flex-1">
+            <dl>
+              <dt className="text-sm font-medium text-gray-500 truncate">
+                {label}
+              </dt>
+              <dd className="text-2xl font-semibold text-gray-900">
+                {value}
+              </dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
-      <div className="animate-pulse space-y-4">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-20 bg-gray-100 rounded-lg" />
-        ))}
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 text-red-700 rounded-lg">
+        <p className="font-medium">{error}</p>
       </div>
     );
   }
@@ -129,7 +162,7 @@ const TournamentStandings = () => {
   return (
     <div className="space-y-6">
       {/* Stats Summary */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard 
           icon={Trophy} 
           label="Total Players"
@@ -152,97 +185,136 @@ const TournamentStandings = () => {
         />
       </div>
 
-      {/* Standings Table */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:px-6 border-b">
-          <h3 className="text-lg font-medium">Tournament Standings</h3>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Player
-                </th>
-                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Grade
-                </th>
-                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Points
-                </th>
-                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Games
-                </th>
-                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Win Rate
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Achievements
-                </th>
+      {/* Desktop View */}
+      <div className="hidden md:block">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Player
+              </th>
+              <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Grade
+              </th>
+              <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Points
+              </th>
+              <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Games
+              </th>
+              <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Win Rate
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Achievements
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {standings.map((player, index) => (
+              <tr key={player.id}>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <span className="text-sm font-medium text-gray-900 w-6">
+                      #{index + 1}
+                    </span>
+                    <span className="ml-2 text-sm font-medium text-gray-900">
+                      {player.name}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                  {player.grade}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">
+                  {player.totalPoints}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                  {player.gamesPlayed}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                  {player.winRate}%
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex flex-wrap gap-2">
+                    {player.achievements.map((achievement, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                      >
+                        {achievement}
+                      </span>
+                    ))}
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {standings.map((player) => (
-                <tr key={player.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {player.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">
-                    {player.grade}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">
-                    {player.totalPoints}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">
-                    {player.gamesPlayed}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile View */}
+      <div className="md:hidden space-y-4">
+        {standings.map((player, index) => (
+          <div key={player.id} className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center">
+                    <span className="text-lg font-semibold text-gray-900">
+                      #{index + 1}
+                    </span>
+                    <h3 className="ml-2 text-lg font-medium text-gray-900">
+                      {player.name}
+                    </h3>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Grade {player.grade}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-semibold text-gray-900">
+                    {player.totalPoints} pts
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {player.gamesPlayed} games
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="flex justify-between px-3 py-2 bg-gray-50 rounded-lg">
+                  <span className="text-sm text-gray-500">Win Rate</span>
+                  <span className="text-sm font-medium text-gray-900">
                     {player.winRate}%
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <div className="flex flex-wrap gap-2">
-                      {player.achievements.map((achievement, index) => (
-                        <span 
-                          key={index}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                        >
-                          {achievement}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </span>
+                </div>
+                <div className="flex justify-between px-3 py-2 bg-gray-50 rounded-lg">
+                  <span className="text-sm text-gray-500">Opponents</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {player.uniqueOpponents}
+                  </span>
+                </div>
+              </div>
+
+              {player.achievements.length > 0 && (
+                <div className="mt-3">
+                  <div className="flex flex-wrap gap-2">
+                    {player.achievements.map((achievement, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                      >
+                        {achievement}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
-};
-
-// Stats Card subcomponent
-const StatCard = ({ icon: Icon, label, value }) => (
-  <div className="bg-white overflow-hidden shadow rounded-lg">
-    <div className="p-5">
-      <div className="flex items-center">
-        <div className="flex-shrink-0">
-          <Icon className="h-6 w-6 text-gray-400" />
-        </div>
-        <div className="ml-5 w-0 flex-1">
-          <dl>
-            <dt className="text-sm font-medium text-gray-500 truncate">
-              {label}
-            </dt>
-            <dd className="text-lg font-medium text-gray-900">
-              {value}
-            </dd>
-          </dl>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-export default TournamentStandings;
+}

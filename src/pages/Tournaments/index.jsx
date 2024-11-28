@@ -1,6 +1,5 @@
 // src/pages/Tournaments/index.jsx
 import { useState, useCallback } from 'react';
-import { Tabs, Tab, Box } from '@mui/material';
 import TournamentMatchForm from '@/components/tournaments/TournamentMatchForm';
 import TournamentStandings from '@/components/tournaments/TournamentStandings';
 import { MatchList } from '@/components/tournaments/MatchList';
@@ -16,10 +15,6 @@ export default function TournamentsPage() {
   const [mathProblem, setMathProblem] = useState({ num1: 0, num2: 0, answer: '' });
   const [showFinalConfirmation, setShowFinalConfirmation] = useState(false);
   const [verificationError, setVerificationError] = useState('');
-
-  const handleChange = (event, newValue) => {
-    setActiveTab(newValue);
-  };
 
   const generateMathProblem = useCallback(() => {
     const num1 = Math.floor(Math.random() * 900) + 100; // Random 3-digit number
@@ -99,31 +94,41 @@ export default function TournamentsPage() {
             </div>
           </div>
 
-          <Box sx={{ 
-            width: '100%',
-            borderBottom: 1,
-            borderColor: 'divider',
-            backgroundColor: 'white',
-            borderRadius: '8px 8px 0 0',
-            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-          }}>
-            <Tabs 
-              value={activeTab} 
-              onChange={handleChange}
-              sx={{
-                '& .MuiTab-root': {
-                  textTransform: 'none',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  px: 4
-                }
-              }}
+          {/* Mobile Navigation */}
+          <div className="md:hidden">
+            <select
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
-              <Tab label="Standings" value="standings" />
-              <Tab label="Record Match" value="new" />
-              <Tab label="Recent Matches" value="matches" />
-            </Tabs>
-          </Box>
+              <option value="standings">Standings</option>
+              <option value="new">Record Match</option>
+              <option value="matches">Recent Matches</option>
+            </select>
+          </div>
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:block">
+            <nav className="flex space-x-4">
+              {[
+                { id: 'standings', label: 'Standings' },
+                { id: 'new', label: 'Record Match' },
+                { id: 'matches', label: 'Recent Matches' }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-3 py-2 text-sm font-medium rounded-md ${
+                    activeTab === tab.id
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow">
