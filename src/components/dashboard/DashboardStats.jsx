@@ -1,3 +1,4 @@
+// src/components/dashboard/DashboardStats.jsx
 import { Users, CheckCircle, Award } from 'lucide-react';
 
 export default function DashboardStats({ stats, loading }) {
@@ -29,7 +30,7 @@ const StatCard = ({ icon, title, value }) => {
         {icon}
         <h3 className="text-sm font-medium text-gray-600">{title}</h3>
       </div>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-2 text-3xl font-semibold">{value}</p>
     </div>
   );
 };

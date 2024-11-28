@@ -1,83 +1,13 @@
 // src/components/attendance/RealTimeAttendance.jsx
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useMemo } from 'react';
 import { Search, CheckCircle, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
+import { getOrCreateSession } from '@/lib/attendanceHelpers';
 import { toast } from 'sonner';
 
-async function fetchAttendance(sessionId) {
-  try {
-    // First fetch active students
-    const { data: students, error: studentsError } = await supabase
-      .from('students')
-      .select('*')
-      .eq('active', true)
-      .order('grade')
-      .order('last_name');
-
-    if (studentsError) throw studentsError;
-
-    // Then fetch attendance records for the session
-    const { data: attendanceRecords, error: attendanceError } = await supabase
-      .from('student_attendance')
-      .select('*')
-      .eq('session_id', sessionId);
-
-    if (attendanceError) throw attendanceError;
-
-    // Map attendance records by student ID
-    const attendanceMap = {};
-    attendanceRecords?.forEach(record => {
-      attendanceMap[record.student_id] = {
-        checkedIn: !!record.check_in_time,
-        checkedOut: !!record.check_out_time,
-        recordId: record.id
-      };
-    });
-
-    return {
-      students: students || [],
-      attendance: attendanceMap
-    };
-  } catch (error) {
-    console.error('Error fetching data:', error);
-    throw error;
-  }
-}
-
-async function getOrCreateSession(date) {
-  const formattedDate = formatDate(date);
-  
-  try {
-    // Check for existing session
-    const { data: existingSession } = await supabase
-      .from('attendance_sessions')
-      .select('*')
-      .eq('session_date', formattedDate)
-      .single();
-
-    if (existingSession) return existingSession;
-
-    // Create new session
-    const { data: newSession, error } = await supabase
-      .from('attendance_sessions')
-      .insert([{
-        session_date: formattedDate,
-        start_time: '15:30',
-        end_time: '16:30'
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return newSession;
-  } catch (error) {
-    console.error('Error managing session:', error);
-    throw error;
-  }
-}
-
-export default function RealTimeAttendance() {
+export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,6 +16,21 @@ export default function RealTimeAttendance() {
   const [currentSession, setCurrentSession] = useState(null);
   const [isConnected, setIsConnected] = useState(true);
 
+  // Remove separate stats state and use useMemo instead
+  const stats = useMemo(() => {
+    const presentCount = Object.values(attendance).filter(record => record.checkedIn).length;
+    return {
+      totalStudents: students.length,
+      presentToday: presentCount,
+      attendanceRate: students.length ? Math.round((presentCount / students.length) * 100) : 0
+    };
+  }, [students.length, attendance]);
+
+  // Notify parent of stats changes
+  useEffect(() => {
+    onStatsChange(stats);
+  }, [stats, onStatsChange]);
+
   useEffect(() => {
     loadInitialData();
 
@@ -93,12 +38,12 @@ export default function RealTimeAttendance() {
       .channel('attendance-changes')
       .on(
         'postgres_changes',
-        {
+        { 
           event: '*',
           schema: 'public',
-          table: 'student_attendance'
+          table: 'attendance_records'
         },
-        handleAttendanceChange
+        handleRealtimeUpdate
       )
       .subscribe((status) => {
         setIsConnected(status === 'SUBSCRIBED');
@@ -109,72 +54,97 @@ export default function RealTimeAttendance() {
     };
   }, []);
 
-  const handleAttendanceChange = (payload) => {
-    if (!currentSession) return;
-
-    if (payload.new && payload.new.session_id === currentSession.id) {
-      setAttendance(prev => ({
-        ...prev,
-        [payload.new.student_id]: {
-          checkedIn: !!payload.new.check_in_time,
-          checkedOut: !!payload.new.check_out_time,
-          recordId: payload.new.id
-        }
-      }));
-    }
-  };
-
+  const filteredStudents = useMemo(() => 
+    students.filter(student =>
+      student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [students, searchQuery]
+  );
+  
+  // Modify loadInitialData to set state in the correct order
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      
-      const targetDate = isWednesday(new Date()) ? new Date() : getNextWednesday();
-      const session = await getOrCreateSession(targetDate);
+      console.log('Loading initial data');
+  
+      // Get ALL students without any filters
+      const { data: allStudents, error: studentsError } = await supabase
+        .from('students')
+        .select('*')
+        .order('grade')
+        .order('last_name');
+  
+      if (studentsError) throw studentsError;
+  
+      // Get session immediately after students
+      const today = new Date();
+      const session = await getOrCreateSession(today);
       setCurrentSession(session);
-
-      const { students: loadedStudents, attendance: loadedAttendance } = 
-        await fetchAttendance(session.id);
-
-      setStudents(loadedStudents);
-      setAttendance(loadedAttendance);
+  
+      // Get attendance records
+      const { data: attendanceRecords, error: attendanceError } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('session_id', session.id);
+  
+      if (attendanceError) throw attendanceError;
+  
+      // Process attendance records
+      const attendanceMap = {};
+      attendanceRecords?.forEach(record => {
+        attendanceMap[record.student_id] = {
+          checkedIn: !!record.check_in_time,
+          checkedOut: !!record.check_out_time,
+          recordId: record.id
+        };
+      });
+  
+      // Important: Set both states at once to prevent multiple rerenders
+      setStudents(allStudents || []);
+      setAttendance(attendanceMap);
+  
     } catch (err) {
       console.error('Error loading data:', err);
       setError(err.message);
-      toast.error('Failed to load attendance data');
+      toast.error('Failed to load data');
     } finally {
       setLoading(false);
     }
   };
-
+  
+  // Update the toggleCheckIn function to handle stats correctly
   const toggleCheckIn = async (studentId) => {
     if (!currentSession) {
       toast.error('No active session found');
       return;
     }
-
+  
     try {
       const existingRecord = attendance[studentId];
       
       if (existingRecord?.checkedIn) {
-        // Remove check-in by deleting the record
-        const { error } = await supabase
-          .from('student_attendance')
+        // Remove check-in
+        const { error: deleteError } = await supabase
+          .from('attendance_records')
           .delete()
           .eq('id', existingRecord.recordId);
-
-        if (error) throw error;
-
+  
+        if (deleteError) throw deleteError;
+  
+        // Update attendance state directly
         setAttendance(prev => {
           const newState = { ...prev };
           delete newState[studentId];
           return newState;
         });
-
+  
         toast.success('Check-in removed');
       } else {
-        // Create new check-in record
-        const { data: record, error } = await supabase
-          .from('student_attendance')
+        // Create new check-in
+        const { data: record, error: insertError } = await supabase
+          .from('attendance_records')
           .insert([{
             session_id: currentSession.id,
             student_id: studentId,
@@ -182,9 +152,10 @@ export default function RealTimeAttendance() {
           }])
           .select()
           .single();
-
-        if (error) throw error;
-
+  
+        if (insertError) throw insertError;
+  
+        // Update attendance state directly
         setAttendance(prev => ({
           ...prev,
           [studentId]: {
@@ -193,7 +164,7 @@ export default function RealTimeAttendance() {
             recordId: record.id
           }
         }));
-
+  
         toast.success('Student checked in');
       }
     } catch (err) {
@@ -215,59 +186,70 @@ export default function RealTimeAttendance() {
     }
 
     try {
-      if (existingRecord.checkedOut) {
-        // Remove check-out by setting check_out_time to null
-        const { data: record, error } = await supabase
-          .from('student_attendance')
-          .update({ check_out_time: null })
-          .eq('id', existingRecord.recordId)
-          .select()
-          .single();
+      console.log('Toggling check-out for student:', studentId);
 
-        if (error) throw error;
+      const { error: updateError } = await supabase
+        .from('attendance_records')
+        .update({ 
+          check_out_time: new Date().toISOString() 
+        })
+        .eq('id', existingRecord.recordId);
 
-        setAttendance(prev => ({
-          ...prev,
-          [studentId]: {
-            ...prev[studentId],
-            checkedOut: false
-          }
-        }));
+      if (updateError) throw updateError;
 
-        toast.success('Check-out removed');
-      } else {
-        // Add check-out time
-        const { data: record, error } = await supabase
-          .from('student_attendance')
-          .update({ check_out_time: new Date().toISOString() })
-          .eq('id', existingRecord.recordId)
-          .select()
-          .single();
+      setAttendance(prev => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          checkedOut: true
+        }
+      }));
 
-        if (error) throw error;
-
-        setAttendance(prev => ({
-          ...prev,
-          [studentId]: {
-            ...prev[studentId],
-            checkedOut: true
-          }
-        }));
-
-        toast.success('Student checked out');
-      }
+      toast.success('Student checked out');
     } catch (err) {
       console.error('Error toggling check-out:', err);
-      toast.error('Failed to update check-out status');
+      toast.error('Failed to update attendance');
     }
   };
 
-  // Filter students based on search query
-  const filteredStudents = students.filter(student =>
-    student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleRealtimeUpdate = (payload) => {
+    if (!currentSession) return;
+
+    console.log('Realtime update received:', payload);
+
+    try {
+      if (payload.eventType === 'DELETE') {
+        console.log('Processing delete event');
+        setAttendance(prev => {
+          const studentId = Object.keys(prev).find(
+            key => prev[key].recordId === payload.old.id
+          );
+          if (!studentId) return prev;
+
+          const newState = { ...prev };
+          delete newState[studentId];
+          console.log('New state after delete:', newState);
+          return newState;
+        });
+      } else if (payload.new.session_id === currentSession.id) {
+        console.log('Processing update/insert event');
+        setAttendance(prev => {
+          const newState = {
+            ...prev,
+            [payload.new.student_id]: {
+              checkedIn: !!payload.new.check_in_time,
+              checkedOut: !!payload.new.check_out_time,
+              recordId: payload.new.id
+            }
+          };
+          console.log('New state after update:', newState);
+          return newState;
+        });
+      }
+    } catch (err) {
+      console.error('Error handling realtime update:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -302,9 +284,20 @@ export default function RealTimeAttendance() {
                 <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
               )}
             </div>
-            <p className="text-sm text-gray-500 mt-1">
-              Showing {filteredStudents.length} students
-            </p>
+            <div className="mt-2 flex gap-4">
+              <div>
+                <span className="text-sm font-medium text-gray-500">Total Students:</span>
+                <span className="ml-1 text-sm font-medium text-gray-900">{stats.totalStudents}</span>
+              </div>
+              <div>
+                <span className="text-sm font-medium text-gray-500">Present Today:</span>
+                <span className="ml-1 text-sm font-medium text-gray-900">{stats.presentToday}</span>
+              </div>
+              <div>
+                <span className="text-sm font-medium text-gray-500">Attendance Rate:</span>
+                <span className="ml-1 text-sm font-medium text-gray-900">{stats.attendanceRate}%</span>
+              </div>
+            </div>
           </div>
           <div className="relative w-full sm:w-auto">
             <input
@@ -319,52 +312,56 @@ export default function RealTimeAttendance() {
         </div>
       </div>
 
+      {/* Student list */}
       <div className="divide-y">
-        {filteredStudents.map(student => (
-          <div
-            key={student.id}
-            className={`flex items-center justify-between p-4 hover:bg-gray-50 ${
-              attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
-            }`}
-          >
-            <div>
-              <div className="font-medium text-gray-900">
-                {student.first_name} {student.last_name}
+        {filteredStudents.length > 0 ? (
+          filteredStudents.map(student => (
+            <div
+              key={student.id}
+              className={`flex items-center justify-between p-4 hover:bg-gray-50 ${
+                attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
+              }`}
+            >
+              <div>
+                <div className="font-medium text-gray-900">
+                  {student.first_name} {student.last_name}
+                </div>
+                <div className="text-sm text-gray-500">
+                  Grade {student.grade} - {student.teacher}
+                </div>
               </div>
-              <div className="text-sm text-gray-500">
-                Grade {student.grade} - {student.teacher}
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => toggleCheckIn(student.id)}
+                  className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                    attendance[student.id]?.checkedIn
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  <span>In</span>
+                </button>
+                <button
+                  onClick={() => toggleCheckOut(student.id)}
+                  className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                    attendance[student.id]?.checkedOut
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  disabled={!attendance[student.id]?.checkedIn}
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Out</span>
+                </button>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => toggleCheckIn(student.id)}
-                className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                  attendance[student.id]?.checkedIn
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <CheckCircle className="h-4 w-4" />
-                <span>In</span>
-              </button>
-              <button
-                onClick={() => toggleCheckOut(student.id)}
-                className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                  attendance[student.id]?.checkedOut
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                disabled={!attendance[student.id]?.checkedIn}
-              >
-                <CheckCircle className="h-4 w-4" />
-                <span>Out</span>
-              </button>
-            </div>
-          </div>
-        ))}
-        {filteredStudents.length === 0 && (
+          ))
+        ) : (
           <div className="p-4 text-center text-gray-500">
-            No students found matching your search
+            {searchQuery 
+              ? 'No students found matching your search'
+              : 'No students available'}
           </div>
         )}
       </div>
