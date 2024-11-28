@@ -1,15 +1,13 @@
 // src/components/StudentTable.jsx
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Search, X, Phone, Mail, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
+import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 
 export default function StudentTable({ students: initialStudents, loading, error }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGrade, setFilterGrade] = useState('all');
-  const [showInactive, setShowInactive] = useState(false);
+  const [filterStatus, setFilterStatus] = useState('all');
   const [sortConfig, setSortConfig] = useState({
-    key: 'last_name',
+    key: 'first_name',
     direction: 'asc'
   });
 
@@ -21,27 +19,31 @@ export default function StudentTable({ students: initialStudents, loading, error
       student.teacher?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     const matchesGrade = filterGrade === 'all' || student.grade.toString() === filterGrade;
-    const matchesActive = showInactive || student.active;
+    const matchesStatus = filterStatus === 'all' || 
+      (filterStatus === 'active' && student.active) ||
+      (filterStatus === 'inactive' && !student.active);
     
-    return matchesSearch && matchesGrade && matchesActive;
+    return matchesSearch && matchesGrade && matchesStatus;
   });
 
   // Sort function
   const sortedStudents = [...filteredStudents].sort((a, b) => {
-    if (sortConfig.key === 'name') {
-      const nameA = `${a.last_name}, ${a.first_name}`.toLowerCase();
-      const nameB = `${b.last_name}, ${b.first_name}`.toLowerCase();
-      return sortConfig.direction === 'asc' 
-        ? nameA.localeCompare(nameB)
-        : nameB.localeCompare(nameA);
+    const direction = sortConfig.direction === 'asc' ? 1 : -1;
+    
+    switch (sortConfig.key) {
+      case 'first_name':
+        return direction * a.first_name.localeCompare(b.first_name);
+      case 'last_name':
+        return direction * a.last_name.localeCompare(b.last_name);
+      case 'grade':
+        return direction * (a.grade - b.grade);
+      case 'teacher':
+        return direction * a.teacher.localeCompare(b.teacher);
+      case 'status':
+        return direction * (a.active === b.active ? 0 : a.active ? -1 : 1);
+      default:
+        return 0;
     }
-    
-    const aValue = a[sortConfig.key];
-    const bValue = b[sortConfig.key];
-    
-    if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
   });
 
   const requestSort = (key) => {
@@ -51,21 +53,14 @@ export default function StudentTable({ students: initialStudents, loading, error
     }));
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-md p-4">
-        <p className="text-red-700">{error}</p>
-      </div>
-    );
-  }
+  const SortIcon = ({ columnKey }) => {
+    if (sortConfig.key !== columnKey) {
+      return <ChevronDown className="inline h-4 w-4 text-gray-400" />;
+    }
+    return sortConfig.direction === 'asc' 
+      ? <ChevronUp className="inline h-4 w-4 text-gray-700" />
+      : <ChevronDown className="inline h-4 w-4 text-gray-700" />;
+  };
 
   return (
     <div className="bg-white shadow rounded-lg">
@@ -81,7 +76,7 @@ export default function StudentTable({ students: initialStudents, loading, error
               className="pl-9 pr-4 py-2 border rounded-lg w-full sm:w-64"
             />
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <select
               value={filterGrade}
               onChange={(e) => setFilterGrade(e.target.value)}
@@ -94,15 +89,15 @@ export default function StudentTable({ students: initialStudents, loading, error
                 </option>
               ))}
             </select>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={showInactive}
-                onChange={(e) => setShowInactive(e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-600">Show Inactive</span>
-            </label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="border rounded-lg px-3 py-2"
+            >
+              <option value="all">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
         </div>
       </div>
@@ -114,26 +109,37 @@ export default function StudentTable({ students: initialStudents, loading, error
               <th 
                 scope="col" 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort('name')}
+                onClick={() => requestSort('first_name')}
               >
-                Name <ChevronDown className="inline h-4 w-4" />
+                First Name <SortIcon columnKey="first_name" />
+              </th>
+              <th 
+                scope="col" 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => requestSort('last_name')}
+              >
+                Last Name <SortIcon columnKey="last_name" />
               </th>
               <th 
                 scope="col" 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                 onClick={() => requestSort('grade')}
               >
-                Grade <ChevronDown className="inline h-4 w-4" />
+                Grade <SortIcon columnKey="grade" />
               </th>
               <th 
                 scope="col" 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                 onClick={() => requestSort('teacher')}
               >
-                Teacher <ChevronDown className="inline h-4 w-4" />
+                Teacher <SortIcon columnKey="teacher" />
               </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+              <th 
+                scope="col" 
+                className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => requestSort('status')}
+              >
+                Status <SortIcon columnKey="status" />
               </th>
             </tr>
           </thead>
@@ -143,7 +149,12 @@ export default function StudentTable({ students: initialStudents, loading, error
                 <tr key={student.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
-                      {student.last_name}, {student.first_name}
+                      {student.first_name}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {student.last_name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -167,7 +178,7 @@ export default function StudentTable({ students: initialStudents, loading, error
               ))
             ) : (
               <tr>
-                <td colSpan="4" className="px-6 py-4 text-center text-gray-500">
+                <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
                   No students found
                 </td>
               </tr>

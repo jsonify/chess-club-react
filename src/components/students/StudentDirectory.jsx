@@ -53,7 +53,7 @@ export default function StudentDirectory() {
           .from('students')
           .select('*')
           .order('grade')
-          .order('last_name');
+          .order('last_name');  // Removed the .eq('active', true) filter
 
         if (studentsError) throw studentsError;
 
@@ -72,7 +72,7 @@ export default function StudentDirectory() {
 
     fetchStudents();
 
-    // Subscribe to ALL changes in the students table
+    // Set up realtime subscription
     const channel = supabase
       .channel('student-directory-changes')
       .on(
@@ -85,7 +85,6 @@ export default function StudentDirectory() {
         (payload) => {
           console.log('Students table changed:', payload);
           
-          // Handle different types of changes
           if (payload.eventType === 'UPDATE') {
             setStudents(currentStudents => {
               const updatedStudents = currentStudents.map(student => 
@@ -112,16 +111,13 @@ export default function StudentDirectory() {
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
 
-  // Rest of your component remains the same...
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
