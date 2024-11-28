@@ -1,6 +1,6 @@
 // src/components/attendance/RealTimeAttendance.jsx
 import { useState, useEffect, useMemo } from 'react';
-import { Search, CheckCircle, Loader2, Wifi, WifiOff } from 'lucide-react';
+import { Search, CheckCircle, Loader2, Wifi, WifiOff, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
 import { getOrCreateSession } from '@/lib/attendanceHelpers';
@@ -10,6 +10,11 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterGrade, setFilterGrade] = useState('all');
+  const [sortConfig, setSortConfig] = useState({
+    key: 'first_name',
+    direction: 'asc'
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentSession, setCurrentSession] = useState(null);
@@ -19,7 +24,40 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   const displayDate = isWednesday(today) ? today : getNextWednesday();
   const formattedDisplayDate = formatDate(displayDate);
 
-  // Calculate stats using memo to prevent unnecessary recalculations
+  // Filter and sort students
+  const filteredAndSortedStudents = useMemo(() => {
+    // First, filter the students
+    let filtered = students.filter(student => {
+      const matchesSearch = (
+        student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      const matchesGrade = filterGrade === 'all' || student.grade.toString() === filterGrade;
+      
+      return matchesSearch && matchesGrade;
+    });
+
+    // Then sort them
+    return [...filtered].sort((a, b) => {
+      const direction = sortConfig.direction === 'asc' ? 1 : -1;
+      
+      switch (sortConfig.key) {
+        case 'first_name':
+          return direction * a.first_name.localeCompare(b.first_name);
+        case 'last_name':
+          return direction * a.last_name.localeCompare(b.last_name);
+        case 'grade':
+          return direction * (a.grade - b.grade);
+        case 'teacher':
+          return direction * a.teacher.localeCompare(b.teacher);
+        default:
+          return 0;
+      }
+    });
+  }, [students, searchQuery, filterGrade, sortConfig]);
+
+  // Calculate stats using the filtered students
   const stats = useMemo(() => {
     const presentCount = Object.values(attendance).filter(record => record.checkedIn).length;
     return {
@@ -28,6 +66,22 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
       attendanceRate: students.length ? Math.round((presentCount / students.length) * 100) : 0
     };
   }, [students.length, attendance]);
+
+  const requestSort = (key) => {
+    setSortConfig(current => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  const SortIcon = ({ columnKey }) => {
+    if (sortConfig.key !== columnKey) {
+      return <ChevronDown className="inline h-4 w-4 text-gray-400" />;
+    }
+    return sortConfig.direction === 'asc' 
+      ? <ChevronUp className="inline h-4 w-4 text-gray-700" />
+      : <ChevronDown className="inline h-4 w-4 text-gray-700" />;
+  };
 
   // Notify parent of stats changes
   useEffect(() => {
@@ -288,71 +342,121 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
               )}
             </div>
           </div>
-          <div className="relative w-full sm:w-auto">
-            <input
-              type="text"
-              placeholder="Search students..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+          <div className="flex flex-wrap gap-4 w-full sm:w-auto">
+            <div className="relative flex-grow sm:flex-grow-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search students..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-4 py-2 border rounded-lg w-full"
+              />
+            </div>
+            <select
+              value={filterGrade}
+              onChange={(e) => setFilterGrade(e.target.value)}
+              className="border rounded-lg px-3 py-2"
+            >
+              <option value="all">All Grades</option>
+              {[2, 3, 4, 5, 6].map(grade => (
+                <option key={grade} value={grade.toString()}>
+                  Grade {grade}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
 
-      {/* Student list */}
-      <div className="divide-y">
-        {filteredStudents.length > 0 ? (
-          filteredStudents.map(student => (
-            <div
-              key={student.id}
-              className={`flex items-center justify-between p-4 hover:bg-gray-50 ${
-                attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
-              }`}
-            >
-              <div>
-                <div className="font-medium text-gray-900">
-                  {student.first_name} {student.last_name}
-                </div>
-                <div className="text-sm text-gray-500">
-                  Grade {student.grade} - {student.teacher}
-                </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={() => toggleCheckIn(student.id)}
-                  className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                    attendance[student.id]?.checkedIn
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  <span>In</span>
-                </button>
-                <button
-                  onClick={() => toggleCheckOut(student.id)}
-                  className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                    attendance[student.id]?.checkedOut
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  disabled={!attendance[student.id]?.checkedIn}
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  <span>Out</span>
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="p-4 text-center text-gray-500">
-            {searchQuery 
-              ? 'No students found matching your search'
-              : 'No students available'}
-          </div>
-        )}
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => requestSort('first_name')}
+              >
+                First Name <SortIcon columnKey="first_name" />
+              </th>
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => requestSort('last_name')}
+              >
+                Last Name <SortIcon columnKey="last_name" />
+              </th>
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => requestSort('grade')}
+              >
+                Grade <SortIcon columnKey="grade" />
+              </th>
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                onClick={() => requestSort('teacher')}
+              >
+                Teacher <SortIcon columnKey="teacher" />
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Attendance
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredAndSortedStudents.map((student) => (
+              <tr
+                key={student.id}
+                className={`hover:bg-gray-50 ${
+                  attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
+                }`}
+              >
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900">
+                    {student.first_name}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900">
+                    {student.last_name}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">{student.grade}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">{student.teacher}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right">
+                  <div className="flex items-center justify-end space-x-4">
+                    <button
+                      onClick={() => toggleCheckIn(student.id)}
+                      className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                        attendance[student.id]?.checkedIn
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      <span>In</span>
+                    </button>
+                    <button
+                      onClick={() => toggleCheckOut(student.id)}
+                      className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                        attendance[student.id]?.checkedOut
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                      disabled={!attendance[student.id]?.checkedIn}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      <span>Out</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
