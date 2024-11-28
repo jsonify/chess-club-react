@@ -1,6 +1,7 @@
 // src/components/StudentTable.jsx
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
+import StudentDirectoryCard from '@/components/students/StudentDirectoryCard';
 
 export default function StudentTable({ students: initialStudents, loading, error }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -62,11 +63,27 @@ export default function StudentTable({ students: initialStudents, loading, error
       : <ChevronDown className="inline h-4 w-4 text-gray-700" />;
   };
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[200px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 text-red-700 rounded-lg">
+        <p className="font-medium">Error loading students: {error}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white shadow rounded-lg">
       <div className="p-4 border-b border-gray-200">
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
-          <div className="relative">
+          <div className="relative flex-grow sm:flex-grow-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
@@ -102,50 +119,51 @@ export default function StudentTable({ students: initialStudents, loading, error
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th 
-                scope="col" 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort('first_name')}
-              >
-                First Name <SortIcon columnKey="first_name" />
-              </th>
-              <th 
-                scope="col" 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort('last_name')}
-              >
-                Last Name <SortIcon columnKey="last_name" />
-              </th>
-              <th 
-                scope="col" 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort('grade')}
-              >
-                Grade <SortIcon columnKey="grade" />
-              </th>
-              <th 
-                scope="col" 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort('teacher')}
-              >
-                Teacher <SortIcon columnKey="teacher" />
-              </th>
-              <th 
-                scope="col" 
-                className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => requestSort('status')}
-              >
-                Status <SortIcon columnKey="status" />
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {sortedStudents.length > 0 ? (
-              sortedStudents.map((student) => (
+      {/* Desktop View */}
+      <div className="hidden md:block">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th 
+                  scope="col" 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort('first_name')}
+                >
+                  First Name <SortIcon columnKey="first_name" />
+                </th>
+                <th 
+                  scope="col" 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort('last_name')}
+                >
+                  Last Name <SortIcon columnKey="last_name" />
+                </th>
+                <th 
+                  scope="col" 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort('grade')}
+                >
+                  Grade <SortIcon columnKey="grade" />
+                </th>
+                <th 
+                  scope="col" 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort('teacher')}
+                >
+                  Teacher <SortIcon columnKey="teacher" />
+                </th>
+                <th 
+                  scope="col" 
+                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort('status')}
+                >
+                  Status <SortIcon columnKey="status" />
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {sortedStudents.map((student) => (
                 <tr key={student.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
@@ -175,16 +193,26 @@ export default function StudentTable({ students: initialStudents, loading, error
                     </span>
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
-                  No students found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Mobile View */}
+      <div className="md:hidden p-4 space-y-4">
+        {sortedStudents.map((student) => (
+          <StudentDirectoryCard 
+            key={student.id} 
+            student={student}
+          />
+        ))}
+        
+        {sortedStudents.length === 0 && (
+          <div className="text-center py-6 text-gray-500">
+            No students found matching your search criteria
+          </div>
+        )}
       </div>
     </div>
   );
