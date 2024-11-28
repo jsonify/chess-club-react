@@ -1,5 +1,4 @@
 // src/components/attendance/RealTimeAttendance.jsx
-
 import { useState, useEffect, useMemo } from 'react';
 import { Search, CheckCircle, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -16,7 +15,11 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   const [currentSession, setCurrentSession] = useState(null);
   const [isConnected, setIsConnected] = useState(true);
 
-  // Remove separate stats state and use useMemo instead
+  const today = new Date();
+  const displayDate = isWednesday(today) ? today : getNextWednesday();
+  const formattedDisplayDate = formatDate(displayDate);
+
+  // Calculate stats using memo to prevent unnecessary recalculations
   const stats = useMemo(() => {
     const presentCount = Object.values(attendance).filter(record => record.checkedIn).length;
     return {
@@ -54,6 +57,7 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     };
   }, []);
 
+  // Filter students based on search query
   const filteredStudents = useMemo(() => 
     students.filter(student =>
       student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -62,7 +66,6 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     ),
     [students, searchQuery]
   );
-  
   // Modify loadInitialData to set state in the correct order
   const loadInitialData = async () => {
     try {
@@ -274,29 +277,15 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-medium">
-                {isWednesday(new Date())
+                {isWednesday(today)
                   ? "Today's Attendance"
-                  : "Next Wednesday's Attendance"} ({formatDate(currentSession?.session_date)})
+                  : "Next Wednesday's Attendance"} ({formattedDisplayDate})
               </h2>
               {isConnected ? (
                 <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
               ) : (
                 <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
               )}
-            </div>
-            <div className="mt-2 flex gap-4">
-              <div>
-                <span className="text-sm font-medium text-gray-500">Total Students:</span>
-                <span className="ml-1 text-sm font-medium text-gray-900">{stats.totalStudents}</span>
-              </div>
-              <div>
-                <span className="text-sm font-medium text-gray-500">Present Today:</span>
-                <span className="ml-1 text-sm font-medium text-gray-900">{stats.presentToday}</span>
-              </div>
-              <div>
-                <span className="text-sm font-medium text-gray-500">Attendance Rate:</span>
-                <span className="ml-1 text-sm font-medium text-gray-900">{stats.attendanceRate}%</span>
-              </div>
             </div>
           </div>
           <div className="relative w-full sm:w-auto">
