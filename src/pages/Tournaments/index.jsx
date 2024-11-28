@@ -28,13 +28,17 @@ export default function TournamentsPage() {
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
             <Tabs value={activeTab} onChange={handleChange}>
               <Tab label="Standings" value="standings" />
-              <Tab label="Recent Matches" value="matches" />
               <Tab label="Record Match" value="new" />
+              <Tab label="Recent Matches" value="matches" />
             </Tabs>
           </Box>
 
           {activeTab === 'standings' && (
             <TournamentStandings />
+          )}
+
+          {activeTab === 'new' && (
+            <TournamentMatchForm />
           )}
 
           {activeTab === 'matches' && (
@@ -44,10 +48,6 @@ export default function TournamentsPage() {
               </h2>
               <MatchList />
             </div>
-          )}
-
-          {activeTab === 'new' && (
-            <TournamentMatchForm />
           )}
         </Box>
       </div>

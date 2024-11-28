@@ -1,7 +1,6 @@
 // src/components/layout/Sidebar.jsx
 import { Link, useLocation } from 'react-router-dom';
 import { X } from 'lucide-react';
-import { toast } from 'sonner';
 
 export default function Sidebar({ open, onClose }) {
   const location = useLocation();
@@ -13,9 +12,8 @@ export default function Sidebar({ open, onClose }) {
     { href: '/admin/students', label: 'Students' }
   ];
 
-  const handleLinkClick = (href) => {
+  const handleLinkClick = () => {
     onClose();
-    toast.success(`Navigated to ${href}`);
   };
 
   return (
@@ -59,7 +57,7 @@ export default function Sidebar({ open, onClose }) {
                   ? 'bg-gray-100 text-gray-900' 
                   : 'text-gray-600 hover:bg-gray-50'
               }`}
-              onClick={() => handleLinkClick(link.href)}
+              onClick={handleLinkClick}
             >
               {link.label}
             </Link>

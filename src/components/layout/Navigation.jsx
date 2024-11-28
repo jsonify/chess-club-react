@@ -14,10 +14,6 @@ export default function Navigation({ onMenuClick }) {
     { href: '/admin/registration', label: 'Registration' }
   ];
 
-  const handleLinkClick = (href) => {
-    toast.success(`Navigated to ${href}`);
-  };
-
   const handleLogout = async () => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -61,7 +57,6 @@ export default function Navigation({ onMenuClick }) {
                     ? 'bg-gray-100 text-gray-900' 
                     : 'text-gray-600 hover:bg-gray-50'
                 }`}
-                onClick={() => handleLinkClick(link.href)}
               >
                 {link.label}
               </Link>
@@ -83,4 +78,3 @@ export default function Navigation({ onMenuClick }) {
     </nav>
   );
 }
-
