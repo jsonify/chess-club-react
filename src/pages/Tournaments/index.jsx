@@ -74,24 +74,13 @@ export default function TournamentsPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8 space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Chess Club Tournaments
-              </h1>
-              <p className="mt-2 text-sm text-gray-600">
-                Track matches, standings, and achievements
-              </p>
-            </div>
-            <div className="w-full sm:w-auto">
-              <button
-                onClick={handleModalOpen}
-                className="w-full sm:w-auto inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Reset Tournament Data
-              </button>
-            </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Chess Club Tournaments
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Track matches, standings, and achievements
+            </p>
           </div>
 
           {/* Mobile Navigation */}
@@ -131,7 +120,7 @@ export default function TournamentsPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-lg shadow mb-8">
           <div className="p-6">
             {activeTab === 'standings' && (
               <TournamentStandings key={`standings-${key}`} />
@@ -150,6 +139,17 @@ export default function TournamentsPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Reset Tournament Data Button - Now at bottom */}
+        <div className="flex justify-center pb-8">
+          <button
+            onClick={handleModalOpen}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Reset Tournament Data
+          </button>
         </div>
       </div>
 
