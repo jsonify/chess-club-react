@@ -23,6 +23,9 @@ export default function AttendanceView() {
       <h1 className="text-3xl font-bold tracking-tight text-gray-900">
         Attendance Dashboard
       </h1>
+      <p className="mt-2 text-sm text-gray-600">
+        Track and manage student attendance for chess club sessions
+      </p>
 
       {isWednesday(today) && <ClubDayAlert />}
 

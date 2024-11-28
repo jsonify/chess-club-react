@@ -162,7 +162,7 @@ export default function TournamentStandings() {
   return (
     <div className="space-y-6">
       {/* Stats Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard 
           icon={Trophy} 
           label="Total Players"
@@ -177,11 +177,6 @@ export default function TournamentStandings() {
           icon={Target} 
           label="5 Point Club"
           value={standings.filter(p => p.totalPoints >= 5).length}
-        />
-        <StatCard 
-          icon={Award} 
-          label="Chess Champions"
-          value={standings.filter(p => p.winRate >= 70 && p.gamesPlayed >= 5).length}
         />
       </div>
 

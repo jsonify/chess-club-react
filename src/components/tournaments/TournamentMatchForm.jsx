@@ -1,9 +1,7 @@
-// src/components/tournaments/TournamentMatchForm.jsx
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { formatDate } from '@/lib/utils';
 
 const TournamentMatchForm = () => {
   const [loading, setLoading] = useState(false);
@@ -30,64 +28,45 @@ const TournamentMatchForm = () => {
   const loadActiveStudents = async () => {
     try {
       setLoading(true);
-      const today = new Date().toISOString().split('T')[0];
-  
-      console.log('Today:', today);
-  
-      // Get today's session
+
+      // Get the most recent attendance session
       const { data: sessionData, error: sessionError } = await supabase
         .from('attendance_sessions')
-        .select('*')
-        .eq('session_date', today)
+        .select('id, session_date')
+        .order('session_date', { ascending: false })
+        .limit(1)
         .single();
-  
-      if (sessionError) {
-        console.error('Session Error:', sessionError);
-        throw sessionError;
-      }
-  
-      console.log('Session Data:', sessionData);
-  
-      // Get students who are checked in for today's session
+
+      if (sessionError) throw sessionError;
+
+      // Get students who checked in during the most recent session
       const { data: attendanceData, error: attendanceError } = await supabase
-        .from('student_attendance')
+        .from('attendance_records')
         .select(`
-          id,
           student_id,
-          check_in_time,
-          check_out_time,
           students (
             id,
             first_name,
             last_name,
-            grade,
-            teacher
+            grade
           )
         `)
         .eq('session_id', sessionData.id)
-        .not('check_in_time', 'is', null)
-        .is('check_out_time', null);
-  
-      if (attendanceError) {
-        console.error('Attendance Error:', attendanceError);
-        throw attendanceError;
-      }
-  
-      console.log('Attendance Data:', attendanceData);
-  
+        .not('check_in_time', 'is', null);
+
+      if (attendanceError) throw attendanceError;
+
       // Format students for dropdown
       const formattedStudents = attendanceData
-        .filter(record => record.students) // Ensure we have valid student data
+        .filter(record => record.students) // Ensure valid student data
         .map(record => ({
           id: record.students.id,
           name: `${record.students.first_name} ${record.students.last_name} (Grade ${record.students.grade})`
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
-  
-      console.log('Formatted Students:', formattedStudents);
-  
+
       setStudents(formattedStudents);
-  
+
     } catch (error) {
       console.error('Error loading active students:', error);
       toast.error('Failed to load active students');
@@ -96,6 +75,7 @@ const TournamentMatchForm = () => {
     }
   };
 
+  // Rest of the component remains the same
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (formData.player1 === formData.player2) {
@@ -106,12 +86,12 @@ const TournamentMatchForm = () => {
     setLoading(true);
 
     try {
-      // Get current session
-      const today = new Date().toISOString().split('T')[0];
+      // Get the most recent session for the match record
       const { data: session } = await supabase
         .from('attendance_sessions')
         .select('id')
-        .eq('session_date', today)
+        .order('session_date', { ascending: false })
+        .limit(1)
         .single();
 
       // Insert match record
@@ -184,7 +164,6 @@ const TournamentMatchForm = () => {
             onChange={(e) => setFormData(prev => ({ ...prev, player2: e.target.value }))}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             required
-            disabled={!formData.player1}
           >
             <option value="">Select Player 2</option>
             {getFilteredPlayers(formData.player1).map(student => (
