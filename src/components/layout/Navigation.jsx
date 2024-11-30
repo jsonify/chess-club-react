@@ -1,28 +1,29 @@
 // src/components/layout/Navigation.jsx
-import { Link, useLocation } from 'react-router-dom';
-import { Menu, Swords, LogOut } from 'lucide-react';
-import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { Link, useLocation } from "react-router-dom";
+import { Menu, Swords, LogOut } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabase-offline";
 
 export default function Navigation({ onMenuClick }) {
   const location = useLocation();
-  
+
   const links = [
-    { href: '/', label: 'Attendance' },
-    { href: '/tournaments', label: 'Tournaments' },
-    { href: '/students', label: 'Students' },
-    { href: '/registration', label: 'Registration' }
+    { href: "/", label: "Attendance" },
+    { href: "/tournaments", label: "Tournaments" },
+    { href: "/students", label: "Students" },
+    { href: "/registration", label: "Registration" },
+    { href: "/stats", label: "Stats" },
   ];
 
   const handleLogout = async () => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      
-      toast.success('Logged out successfully');
+
+      toast.success("Logged out successfully");
     } catch (error) {
-      toast.error('Error signing out');
-      console.error('Error:', error);
+      toast.error("Error signing out");
+      console.error("Error:", error);
     }
   };
 
@@ -39,7 +40,7 @@ export default function Navigation({ onMenuClick }) {
             >
               <Menu className="h-6 w-6" />
             </button>
-            
+
             <Link to="/admin" className="flex items-center gap-2 ml-4 lg:ml-0">
               <Swords className="h-8 w-8 text-blue-600" />
               <span className="font-bold text-xl">Chess Club</span>
@@ -48,14 +49,14 @@ export default function Navigation({ onMenuClick }) {
 
           {/* Center section - Navigation links */}
           <div className="hidden lg:flex lg:gap-x-6">
-            {links.map(link => (
+            {links.map((link) => (
               <Link
                 key={link.href}
                 to={link.href}
                 className={`px-3 py-2 text-sm font-medium rounded-md ${
-                  location.pathname === link.href 
-                    ? 'bg-gray-100 text-gray-900' 
-                    : 'text-gray-600 hover:bg-gray-50'
+                  location.pathname === link.href
+                    ? "bg-gray-100 text-gray-900"
+                    : "text-gray-600 hover:bg-gray-50"
                 }`}
               >
                 {link.label}

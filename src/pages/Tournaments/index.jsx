@@ -1,20 +1,24 @@
 // src/pages/Tournaments/index.jsx
-import { useState, useCallback } from 'react';
-import TournamentMatchForm from '@/components/tournaments/TournamentMatchForm';
-import TournamentStandings from '@/components/tournaments/TournamentStandings';
-import { MatchList } from '@/components/tournaments/MatchList';
-import { toast } from 'sonner';
-import { Trash2, Loader2, AlertTriangle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { useState, useCallback } from "react";
+import TournamentMatchForm from "@/components/tournaments/TournamentMatchForm";
+import TournamentStandings from "@/components/tournaments/TournamentStandings";
+import { MatchList } from "@/components/tournaments/MatchList";
+import { toast } from "sonner";
+import { Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { supabase } from "@/lib/supabase-offline";
 
 export default function TournamentsPage() {
-  const [activeTab, setActiveTab] = useState('standings');
+  const [activeTab, setActiveTab] = useState("standings");
   const [key, setKey] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [mathProblem, setMathProblem] = useState({ num1: 0, num2: 0, answer: '' });
+  const [mathProblem, setMathProblem] = useState({
+    num1: 0,
+    num2: 0,
+    answer: "",
+  });
   const [showFinalConfirmation, setShowFinalConfirmation] = useState(false);
-  const [verificationError, setVerificationError] = useState('');
+  const [verificationError, setVerificationError] = useState("");
 
   const generateMathProblem = useCallback(() => {
     const num1 = Math.floor(Math.random() * 900) + 100; // Random 3-digit number
@@ -22,9 +26,9 @@ export default function TournamentsPage() {
     setMathProblem({
       num1,
       num2,
-      answer: ''
+      answer: "",
     });
-    setVerificationError('');
+    setVerificationError("");
   }, []);
 
   const handleModalOpen = () => {
@@ -36,8 +40,8 @@ export default function TournamentsPage() {
   const handleModalClose = () => {
     setIsModalOpen(false);
     setShowFinalConfirmation(false);
-    setVerificationError('');
-    setMathProblem({ num1: 0, num2: 0, answer: '' });
+    setVerificationError("");
+    setMathProblem({ num1: 0, num2: 0, answer: "" });
   };
 
   const handleAnswerSubmit = (e) => {
@@ -45,9 +49,9 @@ export default function TournamentsPage() {
     const correctAnswer = mathProblem.num1 * mathProblem.num2;
     if (parseInt(mathProblem.answer) === correctAnswer) {
       setShowFinalConfirmation(true);
-      setVerificationError('');
+      setVerificationError("");
     } else {
-      setVerificationError('Incorrect answer. Please try again.');
+      setVerificationError("Incorrect answer. Please try again.");
       generateMathProblem();
     }
   };
@@ -55,16 +59,18 @@ export default function TournamentsPage() {
   const handleReset = async () => {
     try {
       setIsResetting(true);
-      const { error: deleteError } = await supabase.rpc('reset_tournament_data');
+      const { error: deleteError } = await supabase.rpc(
+        "reset_tournament_data"
+      );
 
       if (deleteError) throw deleteError;
 
-      toast.success('Tournament data has been reset successfully');
+      toast.success("Tournament data has been reset successfully");
       handleModalClose();
-      setKey(prevKey => prevKey + 1);
+      setKey((prevKey) => prevKey + 1);
     } catch (error) {
-      console.error('Error resetting tournament data:', error);
-      toast.error('Failed to reset tournament data');
+      console.error("Error resetting tournament data:", error);
+      toast.error("Failed to reset tournament data");
     } finally {
       setIsResetting(false);
     }
@@ -100,17 +106,17 @@ export default function TournamentsPage() {
           <div className="hidden md:block">
             <nav className="flex space-x-4">
               {[
-                { id: 'standings', label: 'Standings' },
-                { id: 'new', label: 'Record Match' },
-                { id: 'matches', label: 'Recent Matches' }
+                { id: "standings", label: "Standings" },
+                { id: "new", label: "Record Match" },
+                { id: "matches", label: "Recent Matches" },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`px-3 py-2 text-sm font-medium rounded-md ${
                     activeTab === tab.id
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? "bg-blue-100 text-blue-700"
+                      : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
                   {tab.label}
@@ -122,15 +128,13 @@ export default function TournamentsPage() {
 
         <div className="bg-white rounded-lg shadow mb-8">
           <div className="p-6">
-            {activeTab === 'standings' && (
+            {activeTab === "standings" && (
               <TournamentStandings key={`standings-${key}`} />
             )}
 
-            {activeTab === 'new' && (
-              <TournamentMatchForm key={`form-${key}`} />
-            )}
+            {activeTab === "new" && <TournamentMatchForm key={`form-${key}`} />}
 
-            {activeTab === 'matches' && (
+            {activeTab === "matches" && (
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">
                   Recent Matches
@@ -157,7 +161,7 @@ export default function TournamentsPage() {
       {isModalOpen && (
         <div className="fixed z-50 inset-0 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div 
+            <div
               className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
               onClick={handleModalClose}
             />
@@ -183,12 +187,19 @@ export default function TournamentsPage() {
                         <input
                           type="number"
                           value={mathProblem.answer}
-                          onChange={(e) => setMathProblem(prev => ({ ...prev, answer: e.target.value }))}
+                          onChange={(e) =>
+                            setMathProblem((prev) => ({
+                              ...prev,
+                              answer: e.target.value,
+                            }))
+                          }
                           className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                           placeholder="Enter your answer"
                         />
                         {verificationError && (
-                          <p className="mt-2 text-sm text-red-600">{verificationError}</p>
+                          <p className="mt-2 text-sm text-red-600">
+                            {verificationError}
+                          </p>
                         )}
                         <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
                           <button
@@ -221,7 +232,9 @@ export default function TournamentsPage() {
                       </h3>
                       <div className="mt-2">
                         <p className="text-sm text-gray-500">
-                          Are you sure you want to reset all tournament data? This will permanently delete all matches, standings, and achievements. This action cannot be undone.
+                          Are you sure you want to reset all tournament data?
+                          This will permanently delete all matches, standings,
+                          and achievements. This action cannot be undone.
                         </p>
                       </div>
                     </div>
@@ -239,7 +252,7 @@ export default function TournamentsPage() {
                           Resetting...
                         </>
                       ) : (
-                        'Reset Data'
+                        "Reset Data"
                       )}
                     </button>
                     <button

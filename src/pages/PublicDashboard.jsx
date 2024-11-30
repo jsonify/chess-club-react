@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
-import { Users, Calendar, Clock, ChevronRight } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { supabase } from "@/lib/supabase-offline";
+import { Users, Calendar, Clock, ChevronRight } from "lucide-react";
 
 export default function PublicDashboard() {
   const [stats, setStats] = useState({
     totalStudents: 0,
     activeStudents: 0,
-    grades: {}
+    grades: {},
   });
   const [loading, setLoading] = useState(true);
 
@@ -15,9 +15,9 @@ export default function PublicDashboard() {
     async function fetchPublicStats() {
       try {
         const { data: students } = await supabase
-          .from('students')
-          .select('grade, active')
-          .eq('active', true);
+          .from("students")
+          .select("grade, active")
+          .eq("active", true);
 
         if (students) {
           const gradeDistribution = students.reduce((acc, student) => {
@@ -27,12 +27,12 @@ export default function PublicDashboard() {
 
           setStats({
             totalStudents: students.length,
-            activeStudents: students.filter(s => s.active).length,
-            grades: gradeDistribution
+            activeStudents: students.filter((s) => s.active).length,
+            grades: gradeDistribution,
           });
         }
       } catch (error) {
-        console.error('Error fetching public stats:', error);
+        console.error("Error fetching public stats:", error);
       } finally {
         setLoading(false);
       }
@@ -71,7 +71,7 @@ export default function PublicDashboard() {
                     Active Members
                   </p>
                   <p className="mt-1 text-3xl font-semibold text-gray-900">
-                    {loading ? '-' : stats.activeStudents}
+                    {loading ? "-" : stats.activeStudents}
                   </p>
                 </div>
               </div>
@@ -119,7 +119,9 @@ export default function PublicDashboard() {
         <div className="mt-12 grid gap-8 sm:grid-cols-2">
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="p-6">
-              <h3 className="text-lg font-medium text-gray-900">Club Details</h3>
+              <h3 className="text-lg font-medium text-gray-900">
+                Club Details
+              </h3>
               <div className="mt-4 space-y-4">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Grades:</span>
@@ -143,22 +145,31 @@ export default function PublicDashboard() {
 
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="p-6">
-              <h3 className="text-lg font-medium text-gray-900">Grade Distribution</h3>
+              <h3 className="text-lg font-medium text-gray-900">
+                Grade Distribution
+              </h3>
               <div className="mt-4 space-y-4">
-                {Object.entries(stats.grades).sort().map(([grade, count]) => (
-                  <div key={grade} className="flex justify-between items-center">
-                    <span className="text-gray-600">Grade {grade}:</span>
-                    <div className="flex items-center">
-                      <div className="w-32 bg-gray-200 rounded-full h-2.5 mr-2">
-                        <div 
-                          className="bg-blue-600 h-2.5 rounded-full"
-                          style={{ width: `${(count / stats.activeStudents) * 100}%` }}
-                        ></div>
+                {Object.entries(stats.grades)
+                  .sort()
+                  .map(([grade, count]) => (
+                    <div
+                      key={grade}
+                      className="flex justify-between items-center"
+                    >
+                      <span className="text-gray-600">Grade {grade}:</span>
+                      <div className="flex items-center">
+                        <div className="w-32 bg-gray-200 rounded-full h-2.5 mr-2">
+                          <div
+                            className="bg-blue-600 h-2.5 rounded-full"
+                            style={{
+                              width: `${(count / stats.activeStudents) * 100}%`,
+                            }}
+                          ></div>
+                        </div>
+                        <span className="text-gray-900">{count} students</span>
                       </div>
-                      <span className="text-gray-900">{count} students</span>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           </div>

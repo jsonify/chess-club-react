@@ -1,9 +1,9 @@
 // src/components/auth/LogoutButton.jsx
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { LogOut, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { LogOut, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase-offline";
+import { toast } from "sonner";
 
 export default function LogoutButton() {
   const navigate = useNavigate();
@@ -13,17 +13,16 @@ export default function LogoutButton() {
     try {
       setLoading(true);
       const { error } = await supabase.auth.signOut();
-      
+
       if (error) {
         throw error;
       }
 
-      toast.success('Logged out successfully');
-      navigate('/login');
-      
+      toast.success("Logged out successfully");
+      navigate("/login");
     } catch (error) {
-      toast.error('Error signing out');
-      console.error('Error:', error);
+      toast.error("Error signing out");
+      console.error("Error:", error);
     } finally {
       setLoading(false);
     }

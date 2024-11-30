@@ -6,6 +6,7 @@ import AttendanceView from '@/pages/AttendanceView';
 import Tournaments from '@/pages/Tournaments';
 import StudentDirectory from '@/pages/StudentDirectory';
 import Registration from '@/pages/Registration';
+import Stats from '@/pages/Stats';
 import NotFound from '@/pages/NotFound';
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="tournaments" element={<Tournaments />} />
           <Route path="students" element={<StudentDirectory />} />
           <Route path="registration" element={<Registration />} />
+          <Route path="stats" element={<Stats />} />
         </Route>
 
         {/* 404 route */}

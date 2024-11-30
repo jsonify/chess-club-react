@@ -1,25 +1,33 @@
 // src/components/attendance/RealTimeAttendance.jsx
-import { useState, useEffect, useMemo } from 'react';
-import { Search, CheckCircle, Loader2, Wifi, WifiOff, ChevronDown, ChevronUp } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
-import { getOrCreateSession } from '@/lib/attendanceHelpers';
-import { toast } from 'sonner';
-import StudentAttendanceCard from './_StudentAttendanceCard';
+import { useState, useEffect, useMemo } from "react";
+import {
+  Search,
+  CheckCircle,
+  Loader2,
+  Wifi,
+  WifiOff,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import { supabase } from "@/lib/supabase-offline";
+import { formatDate, getNextWednesday, isWednesday } from "@/lib/utils";
+import { getOrCreateSession } from "@/lib/attendanceHelpers";
+import { toast } from "sonner";
+import StudentAttendanceCard from "./_StudentAttendanceCard";
 
 export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState({});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterGrade, setFilterGrade] = useState('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterGrade, setFilterGrade] = useState("all");
   const [sortConfig, setSortConfig] = useState({
-    key: 'first_name',
-    direction: 'asc'
+    key: "first_name",
+    direction: "asc",
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentSession, setCurrentSession] = useState(null);
-  const [isConnected, setIsConnected] = useState(true);
+  const [isConnected, setIsConnected] = useState(navigator.onLine);
 
   const today = new Date();
   const displayDate = isWednesday(today) ? today : getNextWednesday();
@@ -27,30 +35,28 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
 
   // Filter and sort students
   const filteredAndSortedStudents = useMemo(() => {
-    // First, filter the students
-    let filtered = students.filter(student => {
-      const matchesSearch = (
+    let filtered = students.filter((student) => {
+      const matchesSearch =
         student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        student.teacher?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      const matchesGrade = filterGrade === 'all' || student.grade.toString() === filterGrade;
-      
+        student.teacher?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesGrade =
+        filterGrade === "all" || student.grade.toString() === filterGrade;
+
       return matchesSearch && matchesGrade;
     });
 
-    // Then sort them
     return [...filtered].sort((a, b) => {
-      const direction = sortConfig.direction === 'asc' ? 1 : -1;
-      
+      const direction = sortConfig.direction === "asc" ? 1 : -1;
+
       switch (sortConfig.key) {
-        case 'first_name':
+        case "first_name":
           return direction * a.first_name.localeCompare(b.first_name);
-        case 'last_name':
+        case "last_name":
           return direction * a.last_name.localeCompare(b.last_name);
-        case 'grade':
+        case "grade":
           return direction * (a.grade - b.grade);
-        case 'teacher':
+        case "teacher":
           return direction * a.teacher.localeCompare(b.teacher);
         default:
           return 0;
@@ -60,76 +66,93 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
 
   // Calculate stats
   const stats = useMemo(() => {
-    const presentCount = Object.values(attendance).filter(record => record.checkedIn).length;
+    const presentCount = Object.values(attendance).filter(
+      (record) => record.checkedIn
+    ).length;
     return {
       totalStudents: students.length,
       presentToday: presentCount,
-      attendanceRate: students.length ? Math.round((presentCount / students.length) * 100) : 0
+      attendanceRate: students.length
+        ? Math.round((presentCount / students.length) * 100)
+        : 0,
     };
   }, [students.length, attendance]);
 
-  useEffect(() => {
-    onStatsChange(stats);
-  }, [stats, onStatsChange]);
+  // Handle realtime updates
+  const handleRealtimeUpdate = (payload) => {
+    if (!currentSession || !navigator.onLine) return;
 
-  useEffect(() => {
-    loadInitialData();
+    try {
+      if (payload.eventType === "DELETE") {
+        setAttendance((prev) => {
+          const studentId = Object.keys(prev).find(
+            (key) => prev[key].recordId === payload.old.id
+          );
+          if (!studentId) return prev;
 
-    const channel = supabase
-      .channel('attendance-changes')
-      .on(
-        'postgres_changes',
-        { 
-          event: '*',
-          schema: 'public',
-          table: 'attendance_records'
-        },
-        handleRealtimeUpdate
-      )
-      .subscribe((status) => {
-        setIsConnected(status === 'SUBSCRIBED');
-      });
+          const newState = { ...prev };
+          delete newState[studentId];
+          return newState;
+        });
+      } else if (payload.new.session_id === currentSession.id) {
+        setAttendance((prev) => ({
+          ...prev,
+          [payload.new.student_id]: {
+            checkedIn: !!payload.new.check_in_time,
+            checkedOut: !!payload.new.check_out_time,
+            recordId: payload.new.id,
+          },
+        }));
+      }
+    } catch (err) {
+      console.error("Error handling realtime update:", err);
+    }
+  };
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
+  // Load initial data
   const loadInitialData = async () => {
     try {
       setLoading(true);
-        
-      // Remove the .eq('active', true) filter to get ALL students
+  
+      // First load students
       const { data: allStudents, error: studentsError } = await supabase
         .from('students')
-        .select('*')
-        .order('grade')
-        .order('last_name');
+        .select('*');
   
       if (studentsError) throw studentsError;
   
+      // Sort students
+      const sortedStudents = (allStudents || []).sort((a, b) => {
+        if (a.grade !== b.grade) return a.grade - b.grade;
+        return a.last_name.localeCompare(b.last_name);
+      });
+  
+      // Get or create session
       const session = await getOrCreateSession(today);
       setCurrentSession(session);
   
-      const { data: attendanceRecords, error: attendanceError } = await supabase
+      // Load attendance records
+      const { data: attendanceRecords } = await supabase
         .from('attendance_records')
-        .select('*')
-        .eq('session_id', session.id);
+        .select('*');
   
-      if (attendanceError) throw attendanceError;
+      // Filter records for current session
+      const currentSessionRecords = (attendanceRecords || []).filter(
+        record => record.session_id === session.id
+      );
   
+      // Process attendance records
       const attendanceMap = {};
-      attendanceRecords?.forEach(record => {
+      currentSessionRecords.forEach((record) => {
         attendanceMap[record.student_id] = {
           checkedIn: !!record.check_in_time,
           checkedOut: !!record.check_out_time,
-          recordId: record.id
+          recordId: record.id,
         };
       });
   
-      setStudents(allStudents || []);
+      setStudents(sortedStudents);
       setAttendance(attendanceMap);
-  
     } catch (err) {
       console.error('Error loading data:', err);
       setError(err.message);
@@ -139,140 +162,150 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     }
   };
 
-  const handleRealtimeUpdate = (payload) => {
-    if (!currentSession) return;
-
-    try {
-      if (payload.eventType === 'DELETE') {
-        setAttendance(prev => {
-          const studentId = Object.keys(prev).find(
-            key => prev[key].recordId === payload.old.id
-          );
-          if (!studentId) return prev;
-
-          const newState = { ...prev };
-          delete newState[studentId];
-          return newState;
-        });
-      } else if (payload.new.session_id === currentSession.id) {
-        setAttendance(prev => ({
-          ...prev,
-          [payload.new.student_id]: {
-            checkedIn: !!payload.new.check_in_time,
-            checkedOut: !!payload.new.check_out_time,
-            recordId: payload.new.id
-          }
-        }));
-      }
-    } catch (err) {
-      console.error('Error handling realtime update:', err);
-    }
-  };
-
+  // Toggle check-in status
   const toggleCheckIn = async (studentId) => {
     if (!currentSession) {
-      toast.error('No active session found');
+      toast.error("No active session found");
       return;
     }
 
     try {
       const existingRecord = attendance[studentId];
-      
+
       if (existingRecord?.checkedIn) {
         const { error: deleteError } = await supabase
-          .from('attendance_records')
+          .from("attendance_records")
           .delete()
-          .eq('id', existingRecord.recordId);
+          .match({ id: existingRecord.recordId });
 
         if (deleteError) throw deleteError;
 
-        setAttendance(prev => {
+        setAttendance((prev) => {
           const newState = { ...prev };
           delete newState[studentId];
           return newState;
         });
 
-        toast.success('Check-in removed');
+        toast.success("Check-in removed");
       } else {
+        const newRecord = {
+          session_id: currentSession.id,
+          student_id: studentId,
+          check_in_time: new Date().toISOString(),
+        };
+
         const { data: record, error: insertError } = await supabase
-          .from('attendance_records')
-          .insert([{
-            session_id: currentSession.id,
-            student_id: studentId,
-            check_in_time: new Date().toISOString()
-          }])
+          .from("attendance_records")
+          .insert(newRecord)
           .select()
           .single();
 
         if (insertError) throw insertError;
 
-        setAttendance(prev => ({
+        setAttendance((prev) => ({
           ...prev,
           [studentId]: {
             checkedIn: true,
             checkedOut: false,
-            recordId: record.id
-          }
+            recordId: record.id,
+          },
         }));
 
-        toast.success('Student checked in');
+        toast.success("Student checked in");
       }
     } catch (err) {
-      console.error('Error toggling check-in:', err);
-      toast.error('Failed to update attendance');
+      console.error("Error toggling check-in:", err);
+      toast.error("Failed to update attendance");
     }
   };
 
+  // Toggle check-out status
   const toggleCheckOut = async (studentId) => {
     if (!currentSession) {
-      toast.error('No active session found');
+      toast.error("No active session found");
       return;
     }
 
     const existingRecord = attendance[studentId];
     if (!existingRecord?.checkedIn) {
-      toast.error('Student must be checked in first');
+      toast.error("Student must be checked in first");
       return;
     }
 
     try {
       const { error: updateError } = await supabase
-        .from('attendance_records')
+        .from("attendance_records")
         .update({ check_out_time: new Date().toISOString() })
-        .eq('id', existingRecord.recordId);
+        .match({ id: existingRecord.recordId });
 
       if (updateError) throw updateError;
 
-      setAttendance(prev => ({
+      setAttendance((prev) => ({
         ...prev,
         [studentId]: {
           ...prev[studentId],
-          checkedOut: true
-        }
+          checkedOut: true,
+        },
       }));
 
-      toast.success('Student checked out');
+      toast.success("Student checked out");
     } catch (err) {
-      console.error('Error toggling check-out:', err);
-      toast.error('Failed to update attendance');
+      console.error("Error toggling check-out:", err);
+      toast.error("Failed to update attendance");
     }
   };
 
   const requestSort = (key) => {
-    setSortConfig(current => ({
+    setSortConfig((current) => ({
       key,
-      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+      direction:
+        current.key === key && current.direction === "asc" ? "desc" : "asc",
     }));
   };
 
-  const SortIcon = ({ columnKey }) => {
-    if (sortConfig.key !== columnKey) {
-      return <ChevronDown className="inline h-4 w-4 text-gray-400" />;
+  // Update stats when they change
+  useEffect(() => {
+    onStatsChange(stats);
+  }, [stats, onStatsChange]);
+
+  // Set up realtime subscription and online/offline handlers
+  useEffect(() => {
+    loadInitialData();
+  
+    if (navigator.onLine) {
+      const channel = supabase
+        .channel("attendance-changes")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "attendance_records",
+          },
+          handleRealtimeUpdate
+        )
+        .subscribe((status) => {
+          setIsConnected(status === "SUBSCRIBED" && navigator.onLine);
+        });
+  
+      return () => {
+        channel.unsubscribe?.();
+      };
+    } else {
+      setIsConnected(false);
     }
-    return sortConfig.direction === 'asc' 
-      ? <ChevronUp className="inline h-4 w-4 text-gray-700" />
-      : <ChevronDown className="inline h-4 w-4 text-gray-700" />;
-  };
+  
+    const handleOnline = () => setIsConnected(true);
+    const handleOffline = () => setIsConnected(false);
+  
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+  
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -290,6 +323,17 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     );
   }
 
+  const SortIcon = ({ columnKey }) => {
+    if (sortConfig.key !== columnKey) {
+      return <ChevronDown className="inline h-4 w-4 text-gray-400" />;
+    }
+    return sortConfig.direction === "asc" ? (
+      <ChevronUp className="inline h-4 w-4 text-gray-700" />
+    ) : (
+      <ChevronDown className="inline h-4 w-4 text-gray-700" />
+    );
+  };
+
   return (
     <div className="bg-white rounded-lg shadow">
       <div className="p-4 border-b border-gray-200">
@@ -299,12 +343,19 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
               <h2 className="text-lg font-medium">
                 {isWednesday(today)
                   ? "Today's Attendance"
-                  : "Next Wednesday's Attendance"} ({formattedDisplayDate})
+                  : "Next Wednesday's Attendance"}{" "}
+                ({formattedDisplayDate})
               </h2>
               {isConnected ? (
-                <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
+                <Wifi
+                  className="h-5 w-5 text-green-500"
+                  title="Real-time updates connected"
+                />
               ) : (
-                <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
+                <WifiOff
+                  className="h-5 w-5 text-red-500"
+                  title="Real-time updates disconnected"
+                />
               )}
             </div>
           </div>
@@ -325,7 +376,7 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
               className="border rounded-lg px-3 py-2"
             >
               <option value="all">All Grades</option>
-              {[2, 3, 4, 5, 6].map(grade => (
+              {[2, 3, 4, 5, 6].map((grade) => (
                 <option key={grade} value={grade.toString()}>
                   Grade {grade}
                 </option>
@@ -341,27 +392,27 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th 
+                <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort('first_name')}
+                  onClick={() => requestSort("first_name")}
                 >
                   First Name <SortIcon columnKey="first_name" />
                 </th>
-                <th 
+                <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort('last_name')}
+                  onClick={() => requestSort("last_name")}
                 >
                   Last Name <SortIcon columnKey="last_name" />
                 </th>
-                <th 
+                <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort('grade')}
+                  onClick={() => requestSort("grade")}
                 >
                   Grade <SortIcon columnKey="grade" />
                 </th>
-                <th 
+                <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort('teacher')}
+                  onClick={() => requestSort("teacher")}
                 >
                   Teacher <SortIcon columnKey="teacher" />
                 </th>
@@ -375,7 +426,7 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
                 <tr
                   key={student.id}
                   className={`hover:bg-gray-50 ${
-                    attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
+                    attendance[student.id]?.checkedIn ? "bg-blue-50" : ""
                   }`}
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -389,63 +440,66 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{student.grade}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{student.teacher}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end space-x-4">
-                      <button
-                        onClick={() => toggleCheckIn(student.id)}
-                        className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                          attendance[student.id]?.checkedIn
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                      <CheckCircle className="h-4 w-4" />
-                      <span>In</span>
-                    </button>
-                    <button
-                      onClick={() => toggleCheckOut(student.id)}
-                      className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                        attendance[student.id]?.checkedOut
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                      disabled={!attendance[student.id]?.checkedIn}
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      <span>Out</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile view */}
-      <div className="md:hidden p-4 space-y-4">
-        {filteredAndSortedStudents.map((student) => (
-          <StudentAttendanceCard
-            key={student.id}
-            student={student}
-            attendance={attendance[student.id]}
-            onCheckIn={toggleCheckIn}
-            onCheckOut={toggleCheckOut}
-          />
-        ))}
-        
-        {filteredAndSortedStudents.length === 0 && (
-          <div className="text-center py-6 text-gray-500">
-            No students found matching your search criteria
+                    <div className="text-sm text-gray-900">{student.grade
+                    }</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {student.teacher}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end space-x-4">
+                        <button
+                          onClick={() => toggleCheckIn(student.id)}
+                          className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                            attendance[student.id]?.checkedIn
+                              ? "bg-green-100 text-green-700"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          <span>In</span>
+                        </button>
+                        <button
+                          onClick={() => toggleCheckOut(student.id)}
+                          className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                            attendance[student.id]?.checkedOut
+                              ? "bg-green-100 text-green-700"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                          disabled={!attendance[student.id]?.checkedIn}
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          <span>Out</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
+  
+          {/* Mobile view */}
+          <div className="md:hidden p-4 space-y-4">
+            {filteredAndSortedStudents.map((student) => (
+              <StudentAttendanceCard
+                key={student.id}
+                student={student}
+                attendance={attendance[student.id]}
+                onCheckIn={toggleCheckIn}
+                onCheckOut={toggleCheckOut}
+              />
+            ))}
+  
+            {filteredAndSortedStudents.length === 0 && (
+              <div className="text-center py-6 text-gray-500">
+                No students found matching your search criteria
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
-);
-}
+    );
+  }

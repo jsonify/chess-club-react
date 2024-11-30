@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
-import { Loader2 } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { supabase } from "@/lib/supabase-offline";
+import { Loader2 } from "lucide-react";
 
 export default function ProtectedRoute() {
   const [loading, setLoading] = useState(true);

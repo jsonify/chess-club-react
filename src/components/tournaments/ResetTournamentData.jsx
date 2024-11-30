@@ -1,8 +1,8 @@
 // src/components/tournaments/ResetTournamentData.jsx
-import { useState } from 'react';
-import { Trash2, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
+import { useState } from "react";
+import { Trash2, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase-offline";
+import { toast } from "sonner";
 
 export default function ResetTournamentData({ onReset }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -13,19 +13,20 @@ export default function ResetTournamentData({ onReset }) {
       setIsResetting(true);
 
       // Start a Supabase transaction to delete all tournament-related data
-      const { error: deleteError } = await supabase.rpc('reset_tournament_data');
+      const { error: deleteError } = await supabase.rpc(
+        "reset_tournament_data"
+      );
 
       if (deleteError) throw deleteError;
 
-      toast.success('Tournament data has been reset successfully');
+      toast.success("Tournament data has been reset successfully");
       setIsModalOpen(false);
-      
+
       // Trigger parent component refresh
       if (onReset) onReset();
-
     } catch (error) {
-      console.error('Error resetting tournament data:', error);
-      toast.error('Failed to reset tournament data');
+      console.error("Error resetting tournament data:", error);
+      toast.error("Failed to reset tournament data");
     } finally {
       setIsResetting(false);
     }
@@ -46,7 +47,7 @@ export default function ResetTournamentData({ onReset }) {
         <div className="fixed z-50 inset-0 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
             {/* Background overlay */}
-            <div 
+            <div
               className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
               onClick={() => !isResetting && setIsModalOpen(false)}
             />
@@ -63,7 +64,9 @@ export default function ResetTournamentData({ onReset }) {
                   </h3>
                   <div className="mt-2">
                     <p className="text-sm text-gray-500">
-                      Are you sure you want to reset all tournament data? This will permanently delete all matches, standings, and achievements. This action cannot be undone.
+                      Are you sure you want to reset all tournament data? This
+                      will permanently delete all matches, standings, and
+                      achievements. This action cannot be undone.
                     </p>
                   </div>
                 </div>
@@ -81,7 +84,7 @@ export default function ResetTournamentData({ onReset }) {
                       Resetting...
                     </>
                   ) : (
-                    'Reset Data'
+                    "Reset Data"
                   )}
                 </button>
                 <button

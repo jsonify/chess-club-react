@@ -1,8 +1,8 @@
 // src/components/tournaments/TournamentStandings.jsx
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { Trophy, Users, Target, Award, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase-offline";
+import { Trophy, Users, Target, Award, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function TournamentStandings() {
   const [standings, setStandings] = useState([]);
@@ -15,41 +15,44 @@ export default function TournamentStandings() {
 
   const calculateAchievements = (stats) => {
     const achievements = [];
-    
-    if (stats.totalPoints >= 5) achievements.push('5 Point Club');
-    if (stats.totalPoints >= 10) achievements.push('10 Point Master');
-    if (stats.uniqueOpponents >= 5) achievements.push('Social Player');
-    if (stats.uniqueOpponents >= 10) achievements.push('Chess Ambassador');
-    if (stats.gamesPlayed >= 10) achievements.push('Active Player');
-    if (stats.winRate >= 70 && stats.gamesPlayed >= 5) achievements.push('Chess Champion');
-    
+
+    if (stats.totalPoints >= 5) achievements.push("5 Point Club");
+    if (stats.totalPoints >= 10) achievements.push("10 Point Master");
+    if (stats.uniqueOpponents >= 5) achievements.push("Social Player");
+    if (stats.uniqueOpponents >= 10) achievements.push("Chess Ambassador");
+    if (stats.gamesPlayed >= 10) achievements.push("Active Player");
+    if (stats.winRate >= 70 && stats.gamesPlayed >= 5)
+      achievements.push("Chess Champion");
+
     return achievements;
   };
 
   const fetchStandings = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch matches with player details
       const { data: matches, error: matchesError } = await supabase
-        .from('matches')
-        .select(`
+        .from("matches")
+        .select(
+          `
           *,
           player1:player1_id(id, first_name, last_name, grade),
           player2:player2_id(id, first_name, last_name, grade)
-        `)
-        .not('result', 'eq', 'incomplete');
+        `
+        )
+        .not("result", "eq", "incomplete");
 
       if (matchesError) throw matchesError;
 
       // Process matches to calculate statistics
       const playerStats = {};
 
-      matches.forEach(match => {
+      matches.forEach((match) => {
         const { player1, player2, result } = match;
-        
+
         // Initialize player stats if needed
-        [player1, player2].forEach(player => {
+        [player1, player2].forEach((player) => {
           if (!playerStats[player.id]) {
             playerStats[player.id] = {
               id: player.id,
@@ -59,7 +62,7 @@ export default function TournamentStandings() {
               gamesPlayed: 0,
               wins: 0,
               opponents: new Set(),
-              winRate: 0
+              winRate: 0,
             };
           }
         });
@@ -78,15 +81,15 @@ export default function TournamentStandings() {
 
         // Update points and wins
         switch (result) {
-          case 'player1_win':
+          case "player1_win":
             p1Stats.totalPoints += 1;
             p1Stats.wins += 1;
             break;
-          case 'player2_win':
+          case "player2_win":
             p2Stats.totalPoints += 1;
             p2Stats.wins += 1;
             break;
-          case 'draw':
+          case "draw":
             p1Stats.totalPoints += 0.5;
             p2Stats.totalPoints += 0.5;
             break;
@@ -94,28 +97,29 @@ export default function TournamentStandings() {
       });
 
       // Calculate final statistics and achievements
-      const standingsData = Object.values(playerStats).map(player => ({
+      const standingsData = Object.values(playerStats).map((player) => ({
         ...player,
         uniqueOpponents: player.opponents.size,
         winRate: Math.round((player.wins / player.gamesPlayed) * 100) || 0,
         achievements: calculateAchievements({
           ...player,
           uniqueOpponents: player.opponents.size,
-          winRate: Math.round((player.wins / player.gamesPlayed) * 100) || 0
-        })
+          winRate: Math.round((player.wins / player.gamesPlayed) * 100) || 0,
+        }),
       }));
 
       // Sort by points (desc) then name (asc)
       standingsData.sort((a, b) => {
-        if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+        if (b.totalPoints !== a.totalPoints)
+          return b.totalPoints - a.totalPoints;
         return a.name.localeCompare(b.name);
       });
 
       setStandings(standingsData);
     } catch (error) {
-      console.error('Error fetching standings:', error);
-      setError('Failed to load tournament standings');
-      toast.error('Failed to load tournament standings');
+      console.error("Error fetching standings:", error);
+      setError("Failed to load tournament standings");
+      toast.error("Failed to load tournament standings");
     } finally {
       setLoading(false);
     }
@@ -133,9 +137,7 @@ export default function TournamentStandings() {
               <dt className="text-sm font-medium text-gray-500 truncate">
                 {label}
               </dt>
-              <dd className="text-2xl font-semibold text-gray-900">
-                {value}
-              </dd>
+              <dd className="text-2xl font-semibold text-gray-900">{value}</dd>
             </dl>
           </div>
         </div>
@@ -163,20 +165,20 @@ export default function TournamentStandings() {
     <div className="space-y-6">
       {/* Stats Summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard 
-          icon={Trophy} 
+        <StatCard
+          icon={Trophy}
           label="Total Players"
           value={standings.length}
         />
-        <StatCard 
-          icon={Users} 
+        <StatCard
+          icon={Users}
           label="Active Players"
-          value={standings.filter(p => p.gamesPlayed > 0).length}
+          value={standings.filter((p) => p.gamesPlayed > 0).length}
         />
-        <StatCard 
-          icon={Target} 
+        <StatCard
+          icon={Target}
           label="5 Point Club"
-          value={standings.filter(p => p.totalPoints >= 5).length}
+          value={standings.filter((p) => p.totalPoints >= 5).length}
         />
       </div>
 
@@ -185,22 +187,40 @@ export default function TournamentStandings() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
                 Player
               </th>
-              <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
                 Grade
               </th>
-              <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
                 Points
               </th>
-              <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
                 Games
               </th>
-              <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
                 Win Rate
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th
+                scope="col"
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
                 Achievements
               </th>
             </tr>
@@ -251,7 +271,10 @@ export default function TournamentStandings() {
       {/* Mobile View */}
       <div className="md:hidden space-y-4">
         {standings.map((player, index) => (
-          <div key={player.id} className="bg-white rounded-lg shadow overflow-hidden">
+          <div
+            key={player.id}
+            className="bg-white rounded-lg shadow overflow-hidden"
+          >
             <div className="p-4">
               <div className="flex items-start justify-between">
                 <div>

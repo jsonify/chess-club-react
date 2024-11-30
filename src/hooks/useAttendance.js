@@ -1,11 +1,11 @@
 // src/hooks/useAttendance.js
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { 
-  fetchStudentsWithAttendance, 
-  getOrCreateSession, 
-  updateAttendanceRecord 
-} from '@/lib/attendanceHelpers';
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase-offline";
+import {
+  fetchStudentsWithAttendance,
+  getOrCreateSession,
+  updateAttendanceRecord,
+} from "@/lib/attendanceHelpers";
 
 export function useAttendance(date) {
   const [loading, setLoading] = useState(true);
@@ -13,7 +13,7 @@ export function useAttendance(date) {
   const [data, setData] = useState({
     session: null,
     students: [],
-    attendance: {}
+    attendance: {},
   });
 
   useEffect(() => {
@@ -21,13 +21,13 @@ export function useAttendance(date) {
 
     // Set up realtime subscription
     const channel = supabase
-      .channel('attendance-changes')
+      .channel("attendance-changes")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'student_attendance'
+          event: "*",
+          schema: "public",
+          table: "student_attendance",
         },
         handleAttendanceChange
       )
@@ -40,12 +40,12 @@ export function useAttendance(date) {
 
   const handleAttendanceChange = (payload) => {
     if (payload.new && payload.new.session_id === data.session?.id) {
-      setData(prev => ({
+      setData((prev) => ({
         ...prev,
         attendance: {
           ...prev.attendance,
-          [payload.new.student_id]: payload.new
-        }
+          [payload.new.student_id]: payload.new,
+        },
       }));
     }
   };
@@ -57,17 +57,19 @@ export function useAttendance(date) {
 
       // Get or create session for the date
       const session = await getOrCreateSession(date);
-      
+
       // Fetch students and their attendance records
-      const { students, attendance } = await fetchStudentsWithAttendance(session.id);
+      const { students, attendance } = await fetchStudentsWithAttendance(
+        session.id
+      );
 
       setData({
         session,
         students,
-        attendance
+        attendance,
       });
     } catch (err) {
-      console.error('Error loading attendance data:', err);
+      console.error("Error loading attendance data:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -76,7 +78,7 @@ export function useAttendance(date) {
 
   const updateAttendance = async (studentId, status) => {
     try {
-      if (!data.session) throw new Error('No active session');
+      if (!data.session) throw new Error("No active session");
 
       const updatedRecord = await updateAttendanceRecord(
         data.session.id,
@@ -84,17 +86,17 @@ export function useAttendance(date) {
         status
       );
 
-      setData(prev => ({
+      setData((prev) => ({
         ...prev,
         attendance: {
           ...prev.attendance,
-          [studentId]: updatedRecord
-        }
+          [studentId]: updatedRecord,
+        },
       }));
 
       return updatedRecord;
     } catch (err) {
-      console.error('Error updating attendance:', err);
+      console.error("Error updating attendance:", err);
       throw err;
     }
   };
@@ -106,6 +108,6 @@ export function useAttendance(date) {
     students: data.students,
     attendance: data.attendance,
     updateAttendance,
-    refresh: loadAttendanceData
+    refresh: loadAttendanceData,
   };
 }

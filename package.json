@@ -20,6 +20,7 @@
     "@supabase/supabase-js": "^2.46.1",
     "date-fns": "^4.1.0",
     "dotenv-safe": "^9.1.0",
+    "idb": "^8.0.0",
     "lucide-react": "^0.460.0",
     "prop-types": "^15.8.1",
     "react": "^18.3.1",

@@ -1,23 +1,25 @@
 // src/components/tournaments/TournamentTab.jsx
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { Trophy, Users, Target, Award, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
-import TournamentMatchCard from './TournamentMatchCard';
-import TournamentStandingsCard from './TournamentStandingsCard';
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase-offline";
+import { Trophy, Users, Target, Award, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import TournamentMatchCard from "./TournamentMatchCard";
+import TournamentStandingsCard from "./TournamentStandingsCard";
 
 export default function TournamentTab() {
   const [standings, setStandings] = useState([]);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState('standings');
+  const [activeView, setActiveView] = useState("standings");
 
   // Statistics cards data
   const stats = {
     totalPlayers: standings.length,
-    activePlayers: standings.filter(p => p.gamesPlayed > 0).length,
-    fivePointClub: standings.filter(p => p.totalPoints >= 5).length,
-    championsClub: standings.filter(p => p.winRate >= 70 && p.gamesPlayed >= 5).length
+    activePlayers: standings.filter((p) => p.gamesPlayed > 0).length,
+    fivePointClub: standings.filter((p) => p.totalPoints >= 5).length,
+    championsClub: standings.filter(
+      (p) => p.winRate >= 70 && p.gamesPlayed >= 5
+    ).length,
   };
 
   useEffect(() => {
@@ -26,42 +28,45 @@ export default function TournamentTab() {
 
   const calculateAchievements = (stats) => {
     const achievements = [];
-    
-    if (stats.totalPoints >= 5) achievements.push('5 Point Club');
-    if (stats.totalPoints >= 10) achievements.push('10 Point Master');
-    if (stats.uniqueOpponents >= 5) achievements.push('Social Player');
-    if (stats.uniqueOpponents >= 10) achievements.push('Chess Ambassador');
-    if (stats.gamesPlayed >= 10) achievements.push('Active Player');
-    if (stats.winRate >= 70 && stats.gamesPlayed >= 5) achievements.push('Chess Champion');
-    
+
+    if (stats.totalPoints >= 5) achievements.push("5 Point Club");
+    if (stats.totalPoints >= 10) achievements.push("10 Point Master");
+    if (stats.uniqueOpponents >= 5) achievements.push("Social Player");
+    if (stats.uniqueOpponents >= 10) achievements.push("Chess Ambassador");
+    if (stats.gamesPlayed >= 10) achievements.push("Active Player");
+    if (stats.winRate >= 70 && stats.gamesPlayed >= 5)
+      achievements.push("Chess Champion");
+
     return achievements;
   };
 
   const fetchTournamentData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch matches with player details
       const { data: matchesData, error: matchesError } = await supabase
-        .from('matches')
-        .select(`
+        .from("matches")
+        .select(
+          `
           *,
           player1:player1_id(id, first_name, last_name, grade),
           player2:player2_id(id, first_name, last_name, grade)
-        `)
-        .not('result', 'eq', 'incomplete')
-        .order('created_at', { ascending: false });
+        `
+        )
+        .not("result", "eq", "incomplete")
+        .order("created_at", { ascending: false });
 
       if (matchesError) throw matchesError;
 
       // Process matches to calculate standings
       const playerStats = {};
 
-      matchesData.forEach(match => {
+      matchesData.forEach((match) => {
         const { player1, player2, result } = match;
-        
+
         // Initialize player stats if needed
-        [player1, player2].forEach(player => {
+        [player1, player2].forEach((player) => {
           if (!playerStats[player.id]) {
             playerStats[player.id] = {
               id: player.id,
@@ -71,7 +76,7 @@ export default function TournamentTab() {
               gamesPlayed: 0,
               wins: 0,
               opponents: new Set(),
-              winRate: 0
+              winRate: 0,
             };
           }
         });
@@ -90,15 +95,15 @@ export default function TournamentTab() {
 
         // Update points and wins
         switch (result) {
-          case 'player1_win':
+          case "player1_win":
             p1Stats.totalPoints += 1;
             p1Stats.wins += 1;
             break;
-          case 'player2_win':
+          case "player2_win":
             p2Stats.totalPoints += 1;
             p2Stats.wins += 1;
             break;
-          case 'draw':
+          case "draw":
             p1Stats.totalPoints += 0.5;
             p2Stats.totalPoints += 0.5;
             break;
@@ -106,29 +111,29 @@ export default function TournamentTab() {
       });
 
       // Calculate final statistics and achievements
-      const standingsData = Object.values(playerStats).map(player => ({
+      const standingsData = Object.values(playerStats).map((player) => ({
         ...player,
         uniqueOpponents: player.opponents.size,
         winRate: Math.round((player.wins / player.gamesPlayed) * 100) || 0,
         achievements: calculateAchievements({
           ...player,
           uniqueOpponents: player.opponents.size,
-          winRate: Math.round((player.wins / player.gamesPlayed) * 100) || 0
-        })
+          winRate: Math.round((player.wins / player.gamesPlayed) * 100) || 0,
+        }),
       }));
 
       // Sort by points (desc) then name (asc)
       standingsData.sort((a, b) => {
-        if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+        if (b.totalPoints !== a.totalPoints)
+          return b.totalPoints - a.totalPoints;
         return a.name.localeCompare(b.name);
       });
 
       setStandings(standingsData);
       setMatches(matchesData);
-
     } catch (error) {
-      console.error('Error fetching tournament data:', error);
-      toast.error('Failed to load tournament data');
+      console.error("Error fetching tournament data:", error);
+      toast.error("Failed to load tournament data");
     } finally {
       setLoading(false);
     }
@@ -146,9 +151,7 @@ export default function TournamentTab() {
               <dt className="text-sm font-medium text-gray-500 truncate">
                 {label}
               </dt>
-              <dd className="text-2xl font-semibold text-gray-900">
-                {value}
-              </dd>
+              <dd className="text-2xl font-semibold text-gray-900">{value}</dd>
             </dl>
           </div>
         </div>
@@ -168,23 +171,23 @@ export default function TournamentTab() {
     <div className="space-y-6">
       {/* Stats Summary */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard 
-          icon={Trophy} 
+        <StatCard
+          icon={Trophy}
           label="Total Players"
           value={stats.totalPlayers}
         />
-        <StatCard 
-          icon={Users} 
+        <StatCard
+          icon={Users}
           label="Active Players"
           value={stats.activePlayers}
         />
-        <StatCard 
-          icon={Target} 
+        <StatCard
+          icon={Target}
           label="5 Point Club"
           value={stats.fivePointClub}
         />
-        <StatCard 
-          icon={Award} 
+        <StatCard
+          icon={Award}
           label="Chess Champions"
           value={stats.championsClub}
         />
@@ -195,21 +198,21 @@ export default function TournamentTab() {
         <div className="flex rounded-lg bg-gray-100 p-1">
           <button
             className={`flex-1 rounded-md py-2 text-sm font-medium ${
-              activeView === 'standings'
-                ? 'bg-white shadow text-gray-900'
-                : 'text-gray-500 hover:text-gray-700'
+              activeView === "standings"
+                ? "bg-white shadow text-gray-900"
+                : "text-gray-500 hover:text-gray-700"
             }`}
-            onClick={() => setActiveView('standings')}
+            onClick={() => setActiveView("standings")}
           >
             Standings
           </button>
           <button
             className={`flex-1 rounded-md py-2 text-sm font-medium ${
-              activeView === 'matches'
-                ? 'bg-white shadow text-gray-900'
-                : 'text-gray-500 hover:text-gray-700'
+              activeView === "matches"
+                ? "bg-white shadow text-gray-900"
+                : "text-gray-500 hover:text-gray-700"
             }`}
-            onClick={() => setActiveView('matches')}
+            onClick={() => setActiveView("matches")}
           >
             Recent Matches
           </button>
@@ -222,27 +225,45 @@ export default function TournamentTab() {
           <div className="px-4 py-5 sm:px-6 border-b">
             <h3 className="text-lg font-medium">Tournament Standings</h3>
           </div>
-          
+
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Player
                   </th>
-                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Grade
                   </th>
-                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Points
                   </th>
-                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Games
                   </th>
-                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Win Rate
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Achievements
                   </th>
                 </tr>
@@ -268,7 +289,7 @@ export default function TournamentTab() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex flex-wrap gap-2">
                         {player.achievements.map((achievement, index) => (
-                          <span 
+                          <span
                             key={index}
                             className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                           >
@@ -296,22 +317,16 @@ export default function TournamentTab() {
 
       {/* Mobile View */}
       <div className="md:hidden">
-        {activeView === 'standings' ? (
+        {activeView === "standings" ? (
           <div className="space-y-4">
             {standings.map((player) => (
-              <TournamentStandingsCard
-                key={player.id}
-                player={player}
-              />
+              <TournamentStandingsCard key={player.id} player={player} />
             ))}
           </div>
         ) : (
           <div className="space-y-4">
             {matches.map((match) => (
-              <TournamentMatchCard
-                key={match.id}
-                match={match}
-              />
+              <TournamentMatchCard key={match.id} match={match} />
             ))}
           </div>
         )}

@@ -1,8 +1,8 @@
 // src/components/students/StudentDirectory.jsx
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { Users } from 'lucide-react';
-import StudentTable from '@/components/StudentTable';
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase-offline";
+import { Users } from "lucide-react";
+import StudentTable from "@/components/StudentTable";
 
 export default function StudentDirectory() {
   const [students, setStudents] = useState([]);
@@ -15,31 +15,34 @@ export default function StudentDirectory() {
   });
 
   const updateStats = (studentsData) => {
-    const newStats = studentsData.reduce((acc, student) => {
-      // Count total and active students
-      acc.totalCount++;
-      if (student.active) {
-        acc.activeCount++;
+    const newStats = studentsData.reduce(
+      (acc, student) => {
+        // Count total and active students
+        acc.totalCount++;
+        if (student.active) {
+          acc.activeCount++;
+        }
+
+        // Group by grade
+        if (!acc.byGrade[student.grade]) {
+          acc.byGrade[student.grade] = {
+            total: 0,
+            active: 0,
+          };
+        }
+        acc.byGrade[student.grade].total++;
+        if (student.active) {
+          acc.byGrade[student.grade].active++;
+        }
+
+        return acc;
+      },
+      {
+        totalCount: 0,
+        activeCount: 0,
+        byGrade: {},
       }
-      
-      // Group by grade
-      if (!acc.byGrade[student.grade]) {
-        acc.byGrade[student.grade] = {
-          total: 0,
-          active: 0
-        };
-      }
-      acc.byGrade[student.grade].total++;
-      if (student.active) {
-        acc.byGrade[student.grade].active++;
-      }
-      
-      return acc;
-    }, { 
-      totalCount: 0, 
-      activeCount: 0, 
-      byGrade: {} 
-    });
+    );
 
     setStats(newStats);
   };
@@ -48,12 +51,12 @@ export default function StudentDirectory() {
     async function fetchStudents() {
       try {
         setLoading(true);
-        
+
         const { data: allStudents, error: studentsError } = await supabase
-          .from('students')
-          .select('*')
-          .order('grade')
-          .order('last_name');  // Removed the .eq('active', true) filter
+          .from("students")
+          .select("*")
+          .order("grade")
+          .order("last_name"); // Removed the .eq('active', true) filter
 
         if (studentsError) throw studentsError;
 
@@ -61,9 +64,8 @@ export default function StudentDirectory() {
           setStudents(allStudents);
           updateStats(allStudents);
         }
-        
       } catch (err) {
-        console.error('Error:', err);
+        console.error("Error:", err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -74,37 +76,43 @@ export default function StudentDirectory() {
 
     // Set up realtime subscription
     const channel = supabase
-      .channel('student-directory-changes')
+      .channel("student-directory-changes")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'students'
+          event: "*",
+          schema: "public",
+          table: "students",
         },
         (payload) => {
-          console.log('Students table changed:', payload);
-          
-          if (payload.eventType === 'UPDATE') {
-            setStudents(currentStudents => {
-              const updatedStudents = currentStudents.map(student => 
-                student.id === payload.new.id ? { ...student, ...payload.new } : student
+          console.log("Students table changed:", payload);
+
+          if (payload.eventType === "UPDATE") {
+            setStudents((currentStudents) => {
+              const updatedStudents = currentStudents.map((student) =>
+                student.id === payload.new.id
+                  ? { ...student, ...payload.new }
+                  : student
               );
               updateStats(updatedStudents);
               return updatedStudents;
             });
-          } else if (payload.eventType === 'INSERT') {
-            setStudents(currentStudents => {
-              const newStudents = [...currentStudents, payload.new].sort((a, b) => {
-                if (a.grade !== b.grade) return a.grade - b.grade;
-                return a.last_name.localeCompare(b.last_name);
-              });
+          } else if (payload.eventType === "INSERT") {
+            setStudents((currentStudents) => {
+              const newStudents = [...currentStudents, payload.new].sort(
+                (a, b) => {
+                  if (a.grade !== b.grade) return a.grade - b.grade;
+                  return a.last_name.localeCompare(b.last_name);
+                }
+              );
               updateStats(newStudents);
               return newStudents;
             });
-          } else if (payload.eventType === 'DELETE') {
-            setStudents(currentStudents => {
-              const filteredStudents = currentStudents.filter(student => student.id !== payload.old.id);
+          } else if (payload.eventType === "DELETE") {
+            setStudents((currentStudents) => {
+              const filteredStudents = currentStudents.filter(
+                (student) => student.id !== payload.old.id
+              );
               updateStats(filteredStudents);
               return filteredStudents;
             });
@@ -157,7 +165,7 @@ export default function StudentDirectory() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="p-5">
               <div className="flex items-center">
@@ -177,7 +185,7 @@ export default function StudentDirectory() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="p-5">
               <div className="flex items-center">
@@ -193,7 +201,10 @@ export default function StudentDirectory() {
                       {Object.entries(stats.byGrade)
                         .sort(([a], [b]) => a - b)
                         .map(([grade, counts]) => (
-                          <span key={grade} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">
+                          <span
+                            key={grade}
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2"
+                          >
                             Grade {grade}: {counts.active}/{counts.total}
                           </span>
                         ))}
@@ -206,11 +217,7 @@ export default function StudentDirectory() {
         </div>
 
         <div className="mt-8">
-          <StudentTable 
-            students={students} 
-            loading={loading}
-            error={error}
-          />
+          <StudentTable students={students} loading={loading} error={error} />
         </div>
       </div>
     </div>

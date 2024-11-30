@@ -1,45 +1,44 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
-import { Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { supabase } from "@/lib/supabase-offline";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   // Check if user is already logged in
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate('/admin');
+        navigate("/admin");
       }
     });
   }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    
+
     try {
       setLoading(true);
-      
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password
+        password,
       });
 
       if (error) throw error;
 
       if (data.session) {
-        toast.success('Logged in successfully');
-        navigate('/admin'); // Always navigate to /admin after successful login
+        toast.success("Logged in successfully");
+        navigate("/admin"); // Always navigate to /admin after successful login
       }
-      
     } catch (error) {
-      toast.error('Login failed: ' + error.message);
+      toast.error("Login failed: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -60,8 +59,8 @@ export default function Login() {
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleLogin}>
             <div>
-              <label 
-                htmlFor="email" 
+              <label
+                htmlFor="email"
                 className="block text-sm font-medium text-gray-700"
               >
                 Email address
@@ -81,8 +80,8 @@ export default function Login() {
             </div>
 
             <div>
-              <label 
-                htmlFor="password" 
+              <label
+                htmlFor="password"
                 className="block text-sm font-medium text-gray-700"
               >
                 Password
@@ -110,7 +109,7 @@ export default function Login() {
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
-                  'Sign in'
+                  "Sign in"
                 )}
               </button>
             </div>
