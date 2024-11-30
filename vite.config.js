@@ -18,5 +18,26 @@ export default defineConfig({
   build: {
     target: 'esnext',
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          ui: ['@headlessui/react', '@radix-ui/react-toast', 'lucide-react'],
+          db: ['@supabase/supabase-js']
+        },
+        // Add hash to chunk filenames for cache busting
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]'
+      }
+    },
+    // Ensure sourcemaps are generated for better debugging
+    sourcemap: true
   },
+  // Add service worker for better caching control
+  server: {
+    headers: {
+      'Cache-Control': 'no-store'
+    }
+  }
 });
