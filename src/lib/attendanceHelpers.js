@@ -38,32 +38,43 @@ export async function fetchStudentsWithAttendance(sessionId) {
   }
 }
 
+// src/lib/attendanceHelpers.js
 export async function getOrCreateSession(date) {
   const formattedDate = date.toISOString().split('T')[0];
 
   try {
-    // Check for existing session
-    const { data: existingSession } = await supabase
+    // First attempt to get existing session
+    const { data: existingSession, error: fetchError } = await supabase
       .from('attendance_sessions')
       .select('*')
       .eq('session_date', formattedDate)
       .single();
 
-    if (existingSession) return existingSession;
+    if (existingSession) {
+      return existingSession;
+    }
 
-    // Create new session
-    const { data: newSession, error } = await supabase
+    if (fetchError && fetchError.code !== 'PGRST116') { // Only handle non-not-found errors
+      throw fetchError;
+    }
+
+    // If no session exists, create a new one
+    const { data: newSession, error: createError } = await supabase
       .from('attendance_sessions')
-      .insert([{
+      .upsert([{
         session_date: formattedDate,
         start_time: '15:30',
         end_time: '16:30'
-      }])
+      }], {
+        onConflict: 'session_date',
+        ignoreDuplicates: true
+      })
       .select()
       .single();
 
-    if (error) throw error;
+    if (createError) throw createError;
     return newSession;
+
   } catch (error) {
     console.error('Error managing session:', error);
     throw error;

@@ -3,12 +3,12 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { formatDate, isWednesday, getNextWednesday } from '@/lib/utils';
 import { toast } from 'sonner';
-import ChessClubHeader from './ChessClubHeader';
+import ChessClubHeader from './_ChessClubHeader';
 import DashboardStats from './DashboardStats';
 import ClubDayAlert from './alerts/ClubDayAlert';
-import AttendanceTab from './tabs/AttendanceTab';
-import StudentsTab from './tabs/StudentsTab';
-import TournamentTab from './tabs/TournamentTab';
+import AttendanceTab from './_tabs/AttendanceTab';
+import StudentsTab from './_tabs/StudentsTab';
+import TournamentTab from './_tabs/TournamentTab';
 
 export default function ChessClubDashboard() {
   const [activeTab, setActiveTab] = useState('attendance');

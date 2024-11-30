@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
 import { getOrCreateSession } from '@/lib/attendanceHelpers';
 import { toast } from 'sonner';
-import StudentAttendanceCard from './StudentAttendanceCard';
+import StudentAttendanceCard from './_StudentAttendanceCard';
 
 export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   const [students, setStudents] = useState([]);
