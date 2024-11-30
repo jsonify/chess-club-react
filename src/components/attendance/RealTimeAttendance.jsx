@@ -301,11 +301,13 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
                   ? "Today's Attendance"
                   : "Next Wednesday's Attendance"} ({formattedDisplayDate})
               </h2>
-              {isConnected ? (
-                <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
-              ) : (
-                <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
-              )}
+              {
+              // isConnected ? (
+              //   <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
+              // ) : (
+              //   <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
+              // )
+              }
             </div>
           </div>
           <div className="flex flex-wrap gap-4 w-full sm:w-auto">

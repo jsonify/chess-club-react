@@ -1,4 +1,3 @@
-// src/components/layout/Navigation.jsx
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, Swords, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
@@ -40,7 +39,7 @@ export default function Navigation({ onMenuClick }) {
               <Menu className="h-6 w-6" />
             </button>
             
-            <Link to="/admin" className="flex items-center gap-2 ml-4 lg:ml-0">
+            <Link to="/" className="flex items-center gap-2 ml-4 lg:ml-0">
               <Swords className="h-8 w-8 text-blue-600" />
               <span className="font-bold text-xl">Chess Club</span>
             </Link>

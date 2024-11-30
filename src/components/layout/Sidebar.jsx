@@ -1,4 +1,3 @@
-// src/components/layout/Sidebar.jsx
 import { Link, useLocation } from 'react-router-dom';
 import { X } from 'lucide-react';
 
@@ -6,10 +5,10 @@ export default function Sidebar({ open, onClose }) {
   const location = useLocation();
 
   const links = [
-    { href: '/admin', label: 'Dashboard' },
-    { href: '/admin/registration', label: 'Registration' },
-    { href: '/admin/tournaments', label: 'Tournaments' },
-    { href: '/admin/students', label: 'Students' }
+    { href: '/', label: 'Attendance' },
+    { href: '/tournaments', label: 'Tournaments' },
+    { href: '/students', label: 'Students' },
+    { href: '/registration', label: 'Registration' }
   ];
 
   const handleLinkClick = () => {
