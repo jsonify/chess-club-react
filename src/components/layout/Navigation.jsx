@@ -43,7 +43,7 @@ export default function Navigation({ onMenuClick }) {
             
             <Link to="/" className="flex items-center gap-2 ml-4 lg:ml-0">
               <Swords className="h-8 w-8 text-blue-600" />
-              <span className="font-bold text-xl">Chess Club</span>
+              <span className="font-bold text-xl">Sherwood Chess Club</span>
             </Link>
           </div>
 
