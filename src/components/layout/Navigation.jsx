@@ -1,5 +1,6 @@
+// src/components/layout/Navigation.jsx
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, Swords, LogOut } from 'lucide-react';
+import { Menu, Swords, LogOut, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 
@@ -10,7 +11,8 @@ export default function Navigation({ onMenuClick }) {
     { href: '/', label: 'Attendance' },
     { href: '/tournaments', label: 'Tournaments' },
     { href: '/students', label: 'Students' },
-    { href: '/registration', label: 'Registration' }
+    { href: '/registration', label: 'Registration' },
+    { href: '/database', label: 'Database', className: 'text-yellow-600 hover:text-yellow-700' }
   ];
 
   const handleLogout = async () => {
@@ -54,7 +56,7 @@ export default function Navigation({ onMenuClick }) {
                 className={`px-3 py-2 text-sm font-medium rounded-md ${
                   location.pathname === link.href 
                     ? 'bg-gray-100 text-gray-900' 
-                    : 'text-gray-600 hover:bg-gray-50'
+                    : `text-gray-600 hover:bg-gray-50 ${link.className || ''}`
                 }`}
               >
                 {link.label}
@@ -62,7 +64,7 @@ export default function Navigation({ onMenuClick }) {
             ))}
           </div>
 
-          {/* Right section - Logout button */}
+          {/* Right section - Logout button
           <div className="flex items-center">
             <button
               onClick={handleLogout}
@@ -71,7 +73,7 @@ export default function Navigation({ onMenuClick }) {
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Sign out</span>
             </button>
-          </div>
+          </div> */}
         </div>
       </div>
     </nav>

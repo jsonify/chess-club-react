@@ -11,21 +11,33 @@ export default function ResetTournamentData({ onReset }) {
   const handleReset = async () => {
     try {
       setIsResetting(true);
-
-      // Start a Supabase transaction to delete all tournament-related data
-      const { error: deleteError } = await supabase.rpc('reset_tournament_data');
-
-      if (deleteError) throw deleteError;
-
-      toast.success('Tournament data has been reset successfully');
-      setIsModalOpen(false);
       
-      // Trigger parent component refresh
-      if (onReset) onReset();
-
+      // Debug: Check authentication status
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      console.log('Current session:', session); // Debug log
+      
+      if (!session) {
+        toast.error('You must be signed in to reset tournament data');
+        handleModalClose();
+        return;
+      }
+  
+      // Debug: Log the request
+      console.log('Attempting to reset tournament data...');
+      
+      const { error: deleteError } = await supabase.rpc('reset_tournament_data');
+  
+      if (deleteError) {
+        console.error('Delete error details:', deleteError); // Debug log
+        throw deleteError;
+      }
+  
+      toast.success('Tournament data has been reset successfully');
+      handleModalClose();
+      setKey(prevKey => prevKey + 1);
     } catch (error) {
-      console.error('Error resetting tournament data:', error);
-      toast.error('Failed to reset tournament data');
+      console.error('Full error object:', error); // Debug log
+      toast.error(`Failed to reset tournament data: ${error.message}`);
     } finally {
       setIsResetting(false);
     }

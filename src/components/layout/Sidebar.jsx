@@ -1,14 +1,16 @@
+// src/components/layout/Sidebar.jsx
 import { Link, useLocation } from 'react-router-dom';
-import { X } from 'lucide-react';
+import { X, Database } from 'lucide-react';
 
 export default function Sidebar({ open, onClose }) {
   const location = useLocation();
 
   const links = [
-    { href: '/', label: 'Attendance' },
+    { href: '/', label: 'Dashboard' },
+    { href: '/registration', label: 'Registration' },
     { href: '/tournaments', label: 'Tournaments' },
     { href: '/students', label: 'Students' },
-    { href: '/registration', label: 'Registration' }
+    { href: '/database', label: 'Database', className: 'text-yellow-600' }
   ];
 
   const handleLinkClick = () => {
@@ -54,7 +56,7 @@ export default function Sidebar({ open, onClose }) {
               className={`px-4 py-2 text-sm font-medium rounded-md ${
                 location.pathname === link.href 
                   ? 'bg-gray-100 text-gray-900' 
-                  : 'text-gray-600 hover:bg-gray-50'
+                  : `text-gray-600 hover:bg-gray-50 ${link.className || ''}`
               }`}
               onClick={handleLinkClick}
             >
