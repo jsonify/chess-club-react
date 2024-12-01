@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Trash2, Loader2, AlertTriangle, RefreshCcw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import ScheduledResetManager from '@/components/database/ScheduledResetManager';
 
 export default function DatabaseManagement() {
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -14,7 +15,7 @@ export default function DatabaseManagement() {
   const [resetType, setResetType] = useState(null);
 
   const generateMathProblem = useCallback(() => {
-    const num1 = Math.floor(Math.random() * 90) + 10; // Random 2-digit number
+    const num1 = Math.floor(Math.random() * 90) + 10;
     const num2 = Math.floor(Math.random() * 90) + 10;
     setMathProblem({
       num1,
@@ -59,28 +60,26 @@ export default function DatabaseManagement() {
   const handleReset = async () => {
     try {
       setIsResetting(true);
-  
+
       if (resetType === 'tournament') {
         const { error: deleteError } = await supabase.rpc('reset_tournament_data');
         if (deleteError) throw deleteError;
         toast.success('Tournament data has been reset successfully');
       } else if (resetType === 'session') {
-        // First get today's session
         const today = new Date().toISOString().split('T')[0];
         const { data: sessionData, error: sessionError } = await supabase
           .from('attendance_sessions')
           .select('id')
           .eq('session_date', today)
           .single();
-  
+
         if (sessionError) throw sessionError;
-  
+
         if (!sessionData) {
           toast.error('No session found for today');
           return;
         }
-  
-        // Delete attendance records for today's session
+
         const { error: attendanceError } = await supabase
           .from('attendance_records')
           .delete()
@@ -90,7 +89,7 @@ export default function DatabaseManagement() {
         
         toast.success("Today's session data has been reset successfully");
       }
-  
+
       handleModalClose();
     } catch (error) {
       console.error('Error resetting data:', error);
@@ -217,6 +216,9 @@ export default function DatabaseManagement() {
         </div>
 
         <div className="space-y-6">
+          {/* Automated Reset Schedule */}
+          <ScheduledResetManager />
+
           {/* Reset Tournament Data */}
           <div className="bg-white shadow rounded-lg p-6">
             <div className="flex items-center justify-between">
@@ -256,14 +258,13 @@ export default function DatabaseManagement() {
           </div>
         </div>
 
-        {/* Reset Tournament Modal */}
+        {/* Reset Modals */}
         <ResetModal
           isOpen={isResetModalOpen}
           title="Reset Tournament Data"
           description="Are you sure you want to reset all tournament data? This will permanently delete all matches, standings, and achievements. This action cannot be undone."
         />
 
-        {/* Reset Session Modal */}
         <ResetModal
           isOpen={isSessionModalOpen}
           title="Reset Current Session"
