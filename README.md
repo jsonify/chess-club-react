@@ -6,14 +6,17 @@ A web application for managing elementary school chess clubs, designed to stream
 
 - **Attendance Management**
   - Digital check-in/check-out system
-  - Real-time attendance tracking
-  - Historical attendance records
-  - Automated alerts for missed checkouts
+  - Real-time attendance tracking with live updates
+  - Attendance history and analytics
+  - Automatic session management
   - Weekly attendance statistics
+  - Configurable automatic reset schedules
 
 - **Tournament System**
   - Match recording and results tracking 
   - Student rankings and statistics
+  - Real-time tournament standings
+  - Material difference tracking
   - Achievement tracking system including:
     - "5 Point Club"
     - "10 Point Master" 
@@ -23,11 +26,20 @@ A web application for managing elementary school chess clubs, designed to stream
     - "Chess Champion" (70%+ win rate with 5+ games)
 
 - **Student Management**
-  - Digital registration system
-  - Student directory
+  - Digital registration system with validation
+  - Comprehensive student directory
   - Contact information management
   - Active/inactive status tracking
   - Grade and teacher tracking
+  - Multi-contact support for guardians
+
+- **Administrative Features**
+  - Secure admin dashboard
+  - Data management tools
+  - Automated data cleanup
+  - Scheduled reset management
+  - Audit logging
+  - System configuration
 
 ## Prerequisites
 
@@ -43,7 +55,7 @@ A web application for managing elementary school chess clubs, designed to stream
 
 2. In your Supabase dashboard, go to the SQL Editor
 
-3. Create a new query and paste the complete SQL setup script (available in `supabase/init.sql` in the repository)
+3. Create a new query and paste the complete SQL setup script (available in `supabase/init.sql`)
    - This script will:
      - Create all necessary tables with proper constraints
      - Set up indexes for performance optimization
@@ -51,6 +63,8 @@ A web application for managing elementary school chess clubs, designed to stream
      - Create security policies
      - Set up triggers for timestamp management
      - Create useful views for statistics
+     - Initialize reset management system
+     - Set up audit logging
 
 4. Configure Authentication:
    - Go to Authentication > Settings
@@ -67,131 +81,73 @@ A web application for managing elementary school chess clubs, designed to stream
      VITE_SUPABASE_ANON_KEY=your_anon_key
      ```
 
-6. Set up Storage Buckets (if needed):
-   - Go to Storage
-   - Create a new bucket called `avatars` (if you plan to add profile images)
-   - Set bucket public/private access as needed
+6. Set up Tables:
+   - Students table (personal and contact info)
+   - Attendance sessions and records
+   - Tournament matches and results
+   - System configuration
+   - Reset audit logs
 
 7. Verify Setup:
-   - Run the test query:
-     ```sql
-     select * from students;
-     select * from attendance_sessions;
-     ```
-   - You should see empty tables with the correct structure
+   - Run the test queries provided in the verification section
+   - Check table structures and relationships
+   - Verify RLS policies are active
+   - Test authentication flows
 
-8. Optional: Import Sample Data
-   - Use the provided `sample_data.sql` script (if available in repository)
-   - Or manually add test data through the dashboard
+8. Configure Reset Management:
+   - System includes automatic and manual reset capabilities
+   - Configure through admin interface
+   - Set up scheduled resets if needed
+   - Test reset functionality with sample data
 
-Note: Make sure to regularly backup your database using Supabase's backup features. You can find backup options in Project Settings > Database.
+### Reset Management System
 
-For production deployments, review and possibly modify the RLS policies to match your security requirements.
+The application includes sophisticated data management features:
 
-### Loading Sample Data
+1. **Automated Reset Scheduling**
+   - Schedule automatic resets for attendance data
+   - Configure specific days and times for resets
+   - All times are handled in Pacific Time (PT)
+   - Track last reset timestamp
+   - Email notifications for scheduled resets
 
-To populate your database with sample data for testing:
+2. **Manual Reset Options**
+   - Tournament data reset with verification
+   - Current session reset capability
+   - Protected by math verification challenge
+   - Audit trail of reset operations
 
-1. First ensure you've run the initialization script (`init.sql`)
-2. Go to the SQL Editor in your Supabase dashboard
-3. Open the sample data script (`supabase/sample_data.sql`)
-4. Run the script to populate your database with test data
+3. **Safety Features**
+   - Two-step verification for critical operations
+   - Math challenge verification
+   - Confirmation dialogs
+   - Detailed logging of reset operations
+   - Timezone-aware scheduling
 
-The sample data includes:
-- 12 students (10 active, 2 inactive)
-- Attendance records for the last 4 club meetings
-- Various chess matches with results
-- Achievement examples
+### Development Setup
 
-This data will let you test all features of the application including:
-- Attendance tracking
-- Tournament management
-- Student directory
-- Achievement tracking
-
-Note: Running the sample data script multiple times is safe - it will clear existing data before inserting new records.
-
-### Application Setup
-
-1. Fork the repository
+1. Fork and Clone:
 ```bash
 git clone [your-fork-url]
 cd chess-club
 ```
 
-2. Install dependencies
+2. Install Dependencies:
 ```bash
 npm install
 ```
 
-3. Create a `.env` file in the project root with your Supabase credentials:
-```env
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-4. Update club configuration:
-- Navigate to `src/config/clubConfig.js` (if it doesn't exist, create it)
-- Update the configuration to match your club's details:
-
-```javascript
-export const clubConfig = {
-  clubName: "Your School Chess Club",
-  meetingDay: "Wednesday", // or your preferred day
-  meetingTime: "3:30 PM",
-  grades: [2, 3, 4, 5, 6], // adjust grade range
-  seasonMonths: {
-    start: "November",
-    end: "March"
-  }
-};
-```
-
-### Vercel Setup and Deployment
-
-1. Create a Vercel account at [vercel.com](https://vercel.com)
-
-2. Install the Vercel CLI
+3. Environment Setup:
 ```bash
-npm i -g vercel
+# Create .env file
+cp .env.example .env
+
+# Update with your values
+VITE_SUPABASE_URL=your_project_url
+VITE_SUPABASE_ANON_KEY=your_anon_key
 ```
 
-3. Login to Vercel via CLI
-```bash
-vercel login
-```
-
-4. Initialize Vercel in your project (if not already initialized)
-```bash
-vercel init
-```
-
-5. Deploy to Vercel
-```bash
-vercel
-```
-
-6. Configure environment variables in Vercel:
-   - Go to your project in the Vercel dashboard
-   - Navigate to Settings > Environment Variables
-   - Add the following variables:
-     ```
-     VITE_SUPABASE_URL=your_supabase_project_url
-     VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-     ```
-
-7. Set up automatic deployments (optional):
-   - Connect your GitHub repository to Vercel
-   - Enable automatic deployments in the Vercel dashboard
-   - Configure branch deployments as needed
-
-8. Configure custom domain (optional):
-   - Go to Settings > Domains in your Vercel project
-   - Add your custom domain
-   - Follow the DNS configuration instructions
-
-### Development
-
+4. Local Development:
 ```bash
 # Start development server
 npm run dev
@@ -203,20 +159,80 @@ npm run build
 npm run preview
 ```
 
-## Security Considerations
+### Deployment
 
-- The application uses Supabase Authentication for admin access
-- Make sure to set up Row Level Security (RLS) policies in Supabase
-- Never commit your `.env` file or expose your Supabase credentials
-- Regularly review user access and permissions
-- Set up proper authentication rules in Vercel for production deployments
+1. Vercel Setup:
+```bash
+# Install Vercel CLI
+npm i -g vercel
 
-## Contributing
+# Login to Vercel
+vercel login
+
+# Deploy
+vercel
+```
+
+2. Environment Variables:
+   - Set up in Vercel dashboard:
+     - VITE_SUPABASE_URL
+     - VITE_SUPABASE_ANON_KEY
+   - Enable preview branches if needed
+   - Configure custom domain (optional)
+
+### Security Considerations
+
+- Comprehensive authentication using Supabase Auth
+- Row Level Security (RLS) policies on all tables
+- Protected reset operations with verification
+- Audit logging for critical operations
+- Secure session management
+- Environmental variable protection
+- Regular automated backups
+- Rate limiting on API endpoints
+
+### Maintenance
+
+1. Regular Tasks:
+   - Monitor scheduled resets
+   - Review audit logs
+   - Backup database
+   - Update dependencies
+   - Check error logs
+
+2. Seasonal Tasks:
+   - Archive old tournament data
+   - Update student roster
+   - Review system configurations
+   - Update teacher lists
+
+### Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
 4. Submit a pull request
+
+Contribution Guidelines:
+- Follow existing code style
+- Add tests for new features
+- Update documentation
+- Test thoroughly
+
+## Project Structure
+
+```
+src/
+├── components/        # React components
+│   ├── attendance/    # Attendance tracking
+│   ├── tournaments/   # Tournament management
+│   ├── students/      # Student management
+│   └── shared/        # Shared components
+├── hooks/            # Custom React hooks
+├── lib/             # Utility functions
+├── pages/           # Route pages
+└── styles/          # Global styles
+```
 
 ## License
 
@@ -224,4 +240,16 @@ MIT License - See LICENSE file for details
 
 ## Support
 
-For support, please open an issue in the repository.
+For support:
+1. Check documentation
+2. Review common issues
+3. Open GitHub issue
+4. Contact maintainers
+
+## Acknowledgments
+
+- React + Vite for framework
+- Supabase for backend
+- Vercel for hosting
+- TailwindCSS for styling
+- Contributors and maintainers

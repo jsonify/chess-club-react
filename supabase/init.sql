@@ -54,6 +54,24 @@ create table matches (
     updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
+-- Create system configuration table
+create table system_config (
+    key text primary key,
+    value jsonb not null,
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- Create reset audit log table
+create table reset_audit_log (
+    id uuid primary key default uuid_generate_v4(),
+    reset_type text not null check (reset_type in ('tournament', 'session', 'scheduled')),
+    initiated_by uuid references auth.users(id),
+    status text not null check (status in ('success', 'failed')),
+    error_message text,
+    created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
 -- Create indexes for better query performance
 create index idx_students_active on students(active);
 create index idx_students_grade on students(grade);
@@ -61,6 +79,8 @@ create index idx_attendance_records_session on attendance_records(session_id);
 create index idx_attendance_records_student on attendance_records(student_id);
 create index idx_matches_session on matches(session_id);
 create index idx_matches_players on matches(player1_id, player2_id);
+create index idx_reset_audit_log_type on reset_audit_log(reset_type);
+create index idx_system_config_key on system_config(key);
 
 -- Set up Row Level Security (RLS)
 -- Enable RLS on all tables
@@ -68,6 +88,8 @@ alter table students enable row level security;
 alter table attendance_sessions enable row level security;
 alter table attendance_records enable row level security;
 alter table matches enable row level security;
+alter table system_config enable row level security;
+alter table reset_audit_log enable row level security;
 
 -- Create a function to check if user is authenticated
 create or replace function auth.is_authenticated()
@@ -77,7 +99,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- Create policies for students table
+-- Create policies for all tables
 create policy "Allow read access to authenticated users"
   on students for select
   using (auth.is_authenticated());
@@ -90,7 +112,7 @@ create policy "Allow update access to authenticated users"
   on students for update
   using (auth.is_authenticated());
 
--- Create policies for attendance_sessions table
+-- Repeat similar policies for other tables
 create policy "Allow read access to authenticated users"
   on attendance_sessions for select
   using (auth.is_authenticated());
@@ -103,7 +125,6 @@ create policy "Allow update access to authenticated users"
   on attendance_sessions for update
   using (auth.is_authenticated());
 
--- Create policies for attendance_records table
 create policy "Allow read access to authenticated users"
   on attendance_records for select
   using (auth.is_authenticated());
@@ -120,7 +141,6 @@ create policy "Allow delete access to authenticated users"
   on attendance_records for delete
   using (auth.is_authenticated());
 
--- Create policies for matches table
 create policy "Allow read access to authenticated users"
   on matches for select
   using (auth.is_authenticated());
@@ -133,6 +153,88 @@ create policy "Allow update access to authenticated users"
   on matches for update
   using (auth.is_authenticated());
 
+create policy "Allow read access to authenticated users"
+  on system_config for select
+  using (auth.is_authenticated());
+
+create policy "Allow update access to authenticated users"
+  on system_config for update
+  using (auth.is_authenticated());
+
+create policy "Allow read access to authenticated users"
+  on reset_audit_log for select
+  using (auth.is_authenticated());
+
+create policy "Allow insert access to authenticated users"
+  on reset_audit_log for insert
+  with check (auth.is_authenticated());
+
+-- Create function for scheduled reset
+create or replace function process_scheduled_reset()
+returns void as $$
+declare
+    v_config jsonb;
+    v_current_time time;
+    v_current_day integer;
+    v_session_id uuid;
+begin
+    -- Get reset configuration
+    select value::jsonb into v_config
+    from system_config
+    where key = 'attendance_reset_schedule';
+
+    -- Check if enabled
+    if (v_config->>'enabled')::boolean then
+        v_current_time := current_time;
+        v_current_day := extract(dow from current_date);
+
+        -- Check if it's time to reset
+        if v_current_day = (v_config->>'dayOfWeek')::integer 
+           and v_current_time >= (v_config->>'time')::time then
+            
+            -- Get current session
+            select id into v_session_id
+            from attendance_sessions
+            where session_date = current_date;
+
+            if found then
+                -- Clear attendance records for current session
+                delete from attendance_records
+                where session_id = v_session_id;
+
+                -- Log successful reset
+                insert into reset_audit_log (reset_type, status)
+                values ('scheduled', 'success');
+
+                -- Update last reset timestamp
+                update system_config
+                set value = jsonb_set(value, '{lastReset}', to_jsonb(now()::text))
+                where key = 'attendance_reset_schedule';
+            end if;
+        end if;
+    end if;
+exception when others then
+    -- Log failed reset
+    insert into reset_audit_log (reset_type, status, error_message)
+    values ('scheduled', 'failed', SQLERRM);
+end;
+$$ language plpgsql security definer;
+
+-- Create function for tournament reset
+create or replace function reset_tournament_data()
+returns void as $$
+begin
+    delete from matches;
+    
+    insert into reset_audit_log (reset_type, initiated_by, status)
+    values ('tournament', auth.uid(), 'success');
+exception when others then
+    insert into reset_audit_log (reset_type, initiated_by, status, error_message)
+    values ('tournament', auth.uid(), 'failed', SQLERRM);
+    raise;
+end;
+$$ language plpgsql security definer;
+
 -- Create trigger functions for updated_at timestamps
 create or replace function handle_updated_at()
 returns trigger as $$
@@ -142,7 +244,7 @@ begin
 end;
 $$ language plpgsql;
 
--- Create triggers for updated_at
+-- Create triggers for all tables
 create trigger set_timestamp before update
   on students
   for each row
@@ -163,37 +265,7 @@ create trigger set_timestamp before update
   for each row
   execute function handle_updated_at();
 
--- Create view for active students with attendance stats
-create view student_attendance_stats as
-select 
-    s.id,
-    s.first_name,
-    s.last_name,
-    s.grade,
-    s.teacher,
-    count(distinct ar.session_id) as total_sessions_attended,
-    count(distinct case when ar.missed_checkout then ar.session_id end) as missed_checkouts
-from students s
-left join attendance_records ar on s.id = ar.student_id
-where s.active = true
-group by s.id, s.first_name, s.last_name, s.grade, s.teacher;
-
--- Create view for match statistics
-create view match_statistics as
-select 
-    s.id as student_id,
-    s.first_name,
-    s.last_name,
-    count(m.*) as total_matches,
-    count(case when 
-        (m.player1_id = s.id and m.result = 'player1_win') or
-        (m.player2_id = s.id and m.result = 'player2_win')
-    then 1 end) as wins,
-    count(case when m.result = 'draw' then 1 end) as draws,
-    count(distinct case when m.player1_id = s.id then m.player2_id
-                       when m.player2_id = s.id then m.player1_id
-                  end) as unique_opponents
-from students s
-left join matches m on s.id = m.player1_id or s.id = m.player2_id
-where s.active = true
-group by s.id, s.first_name, s.last_name;
+create trigger set_timestamp before update
+  on system_config
+  for each row
+  execute
