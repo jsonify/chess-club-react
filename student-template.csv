@@ -1,0 +1,5 @@
+first_name,last_name,grade,teacher,contact1_name,contact1_phone,contact1_email,contact1_relationship,contact2_name,contact2_phone,contact2_email,contact2_relationship,active
+Emma,Smith,3,Parsons,Sarah Smith,(503) 555-0123,sarah.smith@email.com,Mom,John Smith,(503) 555-0124,john.smith@email.com,Dad,true
+Liam,Johnson,4,Chapin,Maria Johnson,(503) 555-0125,maria.j@email.com,Mom,,,,,true
+Sophia,Williams,2,Unruh,David Williams,(503) 555-0126,david.w@email.com,Dad,Amy Williams,(503) 555-0127,amy.w@email.com,Mom,true
+Mason,Brown,5,Larson,Jennifer Brown,(503) 555-0128,jen.brown@email.com,Guardian,,,,,false

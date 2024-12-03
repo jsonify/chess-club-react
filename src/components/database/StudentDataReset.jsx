@@ -1,4 +1,3 @@
-// src/components/database/StudentDataReset.jsx
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { UserX } from 'lucide-react';
@@ -21,14 +20,14 @@ export default function StudentDataReset() {
       const { error: matchesError } = await supabase
         .from('matches')
         .delete()
-        .neq('id', 0); // Deletes all matches
+        .not('id', 'is', null); // Changed from neq.0
 
       if (matchesError) throw matchesError;
 
       const { error: attendanceError } = await supabase
         .from('attendance_records')
         .delete()
-        .neq('id', 0); // Deletes all attendance records
+        .not('id', 'is', null);
 
       if (attendanceError) throw attendanceError;
 
@@ -36,19 +35,24 @@ export default function StudentDataReset() {
       const { error: studentsError } = await supabase
         .from('students')
         .delete()
-        .neq('id', 0); // Deletes all students
+        .not('id', 'is', null);
 
       if (studentsError) throw studentsError;
 
       toast.success('All student data has been permanently deleted');
-      setIsModalOpen(false);
-      setShowFinalConfirmation(false);
+      handleModalClose();
     } catch (error) {
       console.error('Error purging student data:', error);
       toast.error('Failed to purge student data: ' + error.message);
     } finally {
       setIsPurging(false);
     }
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setShowFinalConfirmation(false);
+    setVerificationText('');
   };
 
   return (
@@ -86,10 +90,7 @@ export default function StudentDataReset() {
             toast.error('Verification phrase does not match');
           }
         }}
-        onCancel={() => {
-          setIsModalOpen(false);
-          setVerificationText('');
-        }}
+        onCancel={handleModalClose}
       >
         <input
           type="text"
@@ -113,11 +114,7 @@ export default function StudentDataReset() {
         isProcessing={isPurging}
         processingText="Purging Data..."
         onConfirm={handlePurge}
-        onCancel={() => {
-          setShowFinalConfirmation(false);
-          setIsModalOpen(false);
-          setVerificationText('');
-        }}
+        onCancel={handleModalClose}
       >
         <ul className="mt-2 text-sm text-gray-500 list-disc list-inside">
           <li>All student records</li>
