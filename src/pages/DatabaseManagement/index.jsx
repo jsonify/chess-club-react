@@ -1,11 +1,25 @@
 // src/pages/DatabaseManagement/index.jsx
 import { useState } from 'react';
-import { AlertTriangle, Trash2, RefreshCcw, Calendar, Loader2 } from 'lucide-react';
+import { AlertTriangle, Trash2, RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import ScheduledResetManager from '@/components/database/ScheduledResetManager';
 import StudentDataReset from '@/components/database/StudentDataReset';
 import DatabaseConfirmationModal from '@/components/database/DatabaseConfirmationModal';
+
+const DangerZone = ({ children }) => {
+  return (
+    <div className="mt-10">
+      <div className="flex items-center gap-2 mb-4">
+        <AlertTriangle className="h-5 w-5 text-red-600" />
+        <h2 className="text-lg font-medium text-gray-900">Danger Zone</h2>
+      </div>
+      <div className="border-2 border-red-200 rounded-lg divide-y divide-red-200">
+        {children}
+      </div>
+    </div>
+  );
+};
 
 export default function DatabaseManagement() {
   const [isResetting, setIsResetting] = useState(false);
@@ -74,25 +88,45 @@ export default function DatabaseManagement() {
           </p>
         </div>
 
-        <div className="space-y-6">
+        {/* Regular Management Section */}
+        <div className="space-y-6 mb-10">
           {/* Automated Reset Schedule */}
           <ScheduledResetManager />
+        </div>
 
-          {/* Student Data Management */}
-          <StudentDataReset />
+        {/* Danger Zone Section */}
+        <DangerZone>
 
-          {/* Tournament Data Management */}
-          <div className="bg-white shadow rounded-lg p-6">
+          {/* Session Data Reset */}
+          <div className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-medium text-gray-900">Tournament Data</h2>
+                <h3 className="text-sm font-medium text-gray-900">Current Session</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Reset attendance data for <b>today's session only</b>
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSessionResetModal(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100"
+              >
+                <RefreshCcw className="h-4 w-4 mr-2" />
+                Reset Today's Session
+              </button>
+            </div>
+          </div>
+          {/* Tournament Data Reset */}
+          <div className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">Tournament Data</h3>
                 <p className="mt-1 text-sm text-gray-500">
                   Reset all tournament-related data including matches and standings
                 </p>
               </div>
               <button
                 onClick={() => setShowTournamentResetModal(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Reset Tournament Data
@@ -100,27 +134,12 @@ export default function DatabaseManagement() {
             </div>
           </div>
 
-          {/* Session Data Management */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-medium text-gray-900">Current Session</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Reset attendance data for today's session only
-                </p>
-              </div>
-              <button
-                onClick={() => setShowSessionResetModal(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
-              >
-                <RefreshCcw className="h-4 w-4 mr-2" />
-                Reset Today's Session
-              </button>
-            </div>
-          </div>
-        </div>
+          {/* Student Data Reset */}
+          <StudentDataReset />
 
-        {/* Session Reset Modal */}
+        </DangerZone>
+
+        {/* Modals */}
         <DatabaseConfirmationModal
           isOpen={showSessionResetModal}
           icon={AlertTriangle}
@@ -136,7 +155,6 @@ export default function DatabaseManagement() {
           onCancel={() => setShowSessionResetModal(false)}
         />
 
-        {/* Tournament Reset Modal */}
         <DatabaseConfirmationModal
           isOpen={showTournamentResetModal}
           icon={AlertTriangle}
