@@ -563,9 +563,7 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
               >
                 <CheckCircle className="h-4 w-4" />
                 <span>Out</span>
-                {student.self_release && (
-                  <span className="ml-1 text-xs bg-blue-100 text-blue-800 px-1 rounded">SR</span>
-                )}
+                {student.self_release }
               </button>
             </div>
           </td>
