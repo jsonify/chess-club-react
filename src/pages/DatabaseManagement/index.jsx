@@ -1,6 +1,6 @@
 // src/pages/DatabaseManagement/index.jsx
 import { useState } from 'react';
-import { AlertTriangle, Trash2, RefreshCcw } from 'lucide-react';
+import { AlertTriangle, Trash2, RefreshCcw, Calendar, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import ScheduledResetManager from '@/components/database/ScheduledResetManager';

@@ -6,6 +6,7 @@ import { formatDate, getNextWednesday, isWednesday } from '@/lib/utils';
 import { getOrCreateSession } from '@/lib/attendanceHelpers';
 import { toast } from 'sonner';
 import StudentAttendanceCard from './_StudentAttendanceCard';
+import SessionHistory from './SessionHistory';
 
 export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   const [students, setStudents] = useState([]);
@@ -19,6 +20,7 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentSession, setCurrentSession] = useState(null);
+  const [selectedSession, setSelectedSession] = useState(null);
   const [isConnected, setIsConnected] = useState(true);
 
   const today = new Date();
@@ -98,8 +100,7 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-        
-      // Remove the .eq('active', true) filter to get ALL students
+      
       const { data: allStudents, error: studentsError } = await supabase
         .from('students')
         .select('*')
@@ -110,6 +111,7 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   
       const session = await getOrCreateSession(today);
       setCurrentSession(session);
+      setSelectedSession(null);
   
       const { data: attendanceRecords, error: attendanceError } = await supabase
         .from('attendance_records')
@@ -139,8 +141,40 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     }
   };
 
+  const handleSessionSelect = async (session) => {
+    try {
+      setLoading(true);
+      
+      const { data: attendanceRecords, error: attendanceError } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('session_id', session.id);
+  
+      if (attendanceError) throw attendanceError;
+  
+      const attendanceMap = {};
+      attendanceRecords?.forEach(record => {
+        attendanceMap[record.student_id] = {
+          checkedIn: !!record.check_in_time,
+          checkedOut: !!record.check_out_time,
+          recordId: record.id
+        };
+      });
+  
+      setSelectedSession(session);
+      setCurrentSession(session);
+      setAttendance(attendanceMap);
+      
+    } catch (error) {
+      console.error('Error loading session data:', error);
+      toast.error('Failed to load session data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRealtimeUpdate = (payload) => {
-    if (!currentSession) return;
+    if (!currentSession || selectedSession) return;
 
     try {
       if (payload.eventType === 'DELETE') {
@@ -170,8 +204,8 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   };
 
   const toggleCheckIn = async (studentId) => {
-    if (!currentSession) {
-      toast.error('No active session found');
+    if (!currentSession || selectedSession) {
+      toast.error('Cannot modify previous sessions');
       return;
     }
 
@@ -224,8 +258,8 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   };
 
   const toggleCheckOut = async (studentId) => {
-    if (!currentSession) {
-      toast.error('No active session found');
+    if (!currentSession || selectedSession) {
+      toast.error('Cannot modify previous sessions');
       return;
     }
 
@@ -297,17 +331,33 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-medium">
-                {isWednesday(today)
-                  ? "Today's Attendance"
-                  : "Next Wednesday's Attendance"} ({formattedDisplayDate})
+                {selectedSession ? (
+                  <div className="flex items-center">
+                    <span>Attendance for {formatDate(selectedSession.session_date)}</span>
+                    <button
+                      onClick={() => {
+                        setSelectedSession(null);
+                        loadInitialData();
+                      }}
+                      className="ml-2 inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                      Return to Today
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {isWednesday(today)
+                      ? "Today's Attendance"
+                      : "Next Wednesday's Attendance"} ({formattedDisplayDate})
+                  </>
+                )}
               </h2>
-              {
-              // isConnected ? (
-              //   <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
-              // ) : (
-              //   <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
-              // )
-              }
+              {!selectedSession && isConnected && (
+                <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
+              )}
+              {!selectedSession && !isConnected && (
+                <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
+              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-4 w-full sm:w-auto">
@@ -335,6 +385,13 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
             </select>
           </div>
         </div>
+      </div>
+
+      <div className="px-4 py-2">
+        <SessionHistory 
+          onSessionSelect={handleSessionSelect}
+          currentSession={currentSession}
+        />
       </div>
 
       <div>
@@ -400,54 +457,56 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
                     <div className="flex items-center justify-end space-x-4">
                       <button
                         onClick={() => toggleCheckIn(student.id)}
+                        disabled={!!selectedSession}
                         className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
                           attendance[student.id]?.checkedIn
                             ? 'bg-green-100 text-green-700'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                        } ${selectedSession ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                      <CheckCircle className="h-4 w-4" />
-                      <span>In</span>
-                    </button>
-                    <button
-                      onClick={() => toggleCheckOut(student.id)}
-                      className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                        attendance[student.id]?.checkedOut
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                      disabled={!attendance[student.id]?.checkedIn}
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      <span>Out</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                        <CheckCircle className="h-4 w-4" />
+                        <span>In</span>
+                      </button>
+                      <button
+                        onClick={() => toggleCheckOut(student.id)}
+                        disabled={!attendance[student.id]?.checkedIn || !!selectedSession}
+                        className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                          attendance[student.id]?.checkedOut
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        } ${selectedSession ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        <span>Out</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-      {/* Mobile view */}
-      <div className="md:hidden p-4 space-y-4">
-        {filteredAndSortedStudents.map((student) => (
-          <StudentAttendanceCard
-            key={student.id}
-            student={student}
-            attendance={attendance[student.id]}
-            onCheckIn={toggleCheckIn}
-            onCheckOut={toggleCheckOut}
-          />
-        ))}
-        
-        {filteredAndSortedStudents.length === 0 && (
-          <div className="text-center py-6 text-gray-500">
-            No students found matching your search criteria
-          </div>
-        )}
+        {/* Mobile view */}
+        <div className="md:hidden p-4 space-y-4">
+          {filteredAndSortedStudents.map((student) => (
+            <StudentAttendanceCard
+              key={student.id}
+              student={student}
+              attendance={attendance[student.id]}
+              onCheckIn={toggleCheckIn}
+              onCheckOut={toggleCheckOut}
+              disabled={!!selectedSession}
+            />
+          ))}
+          
+          {filteredAndSortedStudents.length === 0 && (
+            <div className="text-center py-6 text-gray-500">
+              No students found matching your search criteria
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
 }
