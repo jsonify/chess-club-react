@@ -1,7 +1,7 @@
 // src/lib/attendanceHelpers.js
 import { supabase } from './supabase';
 
-export async function fetchStudentsWithAttendance(sessionId) {
+export const fetchStudentsWithAttendance = async (sessionId) => {
   try {
     // First, get all active students
     const { data: students, error: studentsError } = await supabase
@@ -15,7 +15,7 @@ export async function fetchStudentsWithAttendance(sessionId) {
 
     // Then get attendance records for the session
     const { data: attendanceRecords, error: attendanceError } = await supabase
-      .from('attendance_records')
+      .from('student_attendance')
       .select('*')
       .eq('session_id', sessionId);
 
@@ -23,14 +23,11 @@ export async function fetchStudentsWithAttendance(sessionId) {
 
     // Create a map of attendance records by student ID
     const attendanceMap = (attendanceRecords || []).reduce((acc, record) => {
-      acc[record.student_id] = {
-        checkedIn: !!record.check_in_time,
-        checkedOut: !!record.check_out_time,
-        recordId: record.id
-      };
+      acc[record.student_id] = record;
       return acc;
     }, {});
 
+    // Return both students and their attendance records
     return {
       students: students || [],
       attendance: attendanceMap
@@ -39,27 +36,36 @@ export async function fetchStudentsWithAttendance(sessionId) {
     console.error('Error fetching students with attendance:', error);
     throw error;
   }
-}
+};
 
-export async function getOrCreateSession(date) {
-  const formattedDate = date.toISOString().split('T')[0];
+export const getOrCreateSession = async (date) => {
+  const getNextWednesday = (from) => {
+    const result = new Date(from);
+    result.setDate(result.getDate() + ((3 + 7 - result.getDay()) % 7));
+    return result;
+  };
 
   try {
+    // Determine the correct session date
+    const targetDate = new Date(date);
+    const sessionDate = targetDate.getDay() === 3 
+      ? targetDate 
+      : getNextWednesday(targetDate);
+
+    // Format the date as YYYY-MM-DD for database
+    const formattedDate = sessionDate.toISOString().split('T')[0];
+
     // Check for existing session
-    const { data: existingSessions, error: queryError } = await supabase
+    const { data: existingSession } = await supabase
       .from('attendance_sessions')
       .select('*')
-      .eq('session_date', formattedDate);
+      .eq('session_date', formattedDate)
+      .single();
 
-    if (queryError) throw queryError;
+    if (existingSession) return existingSession;
 
-    // If we found an existing session, return the first one
-    if (existingSessions && existingSessions.length > 0) {
-      return existingSessions[0];
-    }
-
-    // Create new session
-    const { data: newSession, error: insertError } = await supabase
+    // Create new session if one doesn't exist
+    const { data: newSession, error } = await supabase
       .from('attendance_sessions')
       .insert([{
         session_date: formattedDate,
@@ -69,26 +75,15 @@ export async function getOrCreateSession(date) {
       .select()
       .single();
 
-    if (insertError) {
-      // If insert fails due to concurrent creation, try to fetch again
-      const { data: retrySession, error: retryError } = await supabase
-        .from('attendance_sessions')
-        .select('*')
-        .eq('session_date', formattedDate)
-        .single();
-
-      if (retryError) throw retryError;
-      return retrySession;
-    }
-
+    if (error) throw error;
     return newSession;
   } catch (error) {
     console.error('Error managing session:', error);
     throw error;
   }
-}
+};
 
-export async function updateAttendanceRecord(sessionId, studentId, status) {
+export const updateAttendanceRecord = async (sessionId, studentId, status) => {
   try {
     // Check for existing record
     const { data: existingRecord } = await supabase
@@ -100,19 +95,19 @@ export async function updateAttendanceRecord(sessionId, studentId, status) {
 
     if (existingRecord) {
       // Update existing record
-      const { data: updatedRecord, error: updateError } = await supabase
+      const { data: updatedRecord, error } = await supabase
         .from('student_attendance')
         .update({ attendance_status: status })
         .eq('id', existingRecord.id)
         .select()
         .single();
 
-      if (updateError) throw updateError;
+      if (error) throw error;
       return updatedRecord;
     }
 
     // Create new record
-    const { data: newRecord, error: insertError } = await supabase
+    const { data: newRecord, error } = await supabase
       .from('student_attendance')
       .insert([{
         session_id: sessionId,
@@ -122,10 +117,10 @@ export async function updateAttendanceRecord(sessionId, studentId, status) {
       .select()
       .single();
 
-    if (insertError) throw insertError;
+    if (error) throw error;
     return newRecord;
   } catch (error) {
     console.error('Error updating attendance record:', error);
     throw error;
   }
-}
+};

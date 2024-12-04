@@ -1,3 +1,4 @@
+// src/components/StudentTable.jsx
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Search } from "lucide-react";
 import StudentDetailModal from "./students/StudentDetailModal";
@@ -9,7 +10,6 @@ export default function StudentTable({
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterGrade, setFilterGrade] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
   const [sortConfig, setSortConfig] = useState({
     key: "first_name",
     direction: "asc",
@@ -26,12 +26,8 @@ export default function StudentTable({
       student.teacher?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesGrade =
       filterGrade === "all" || student.grade.toString() === filterGrade;
-    const matchesStatus =
-      filterStatus === "all" ||
-      (filterStatus === "active" && student.active) ||
-      (filterStatus === "inactive" && !student.active);
-
-    return matchesSearch && matchesGrade && matchesStatus;
+    
+    return matchesSearch && matchesGrade;
   });
 
   // Sort function
@@ -47,8 +43,6 @@ export default function StudentTable({
         return direction * (a.grade - b.grade);
       case "teacher":
         return direction * a.teacher.localeCompare(b.teacher);
-      case "status":
-        return direction * (a.active === b.active ? 0 : a.active ? -1 : 1);
       default:
         return 0;
     }
@@ -110,15 +104,6 @@ export default function StudentTable({
                   </option>
                 ))}
               </select>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="border rounded-lg px-3 py-2"
-              >
-                <option value="all">All Statuses</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
             </div>
           </div>
         </div>
@@ -155,13 +140,6 @@ export default function StudentTable({
                 >
                   Teacher <SortIcon columnKey="teacher" />
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort("status")}
-                >
-                  Status <SortIcon columnKey="status" />
-                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -192,23 +170,12 @@ export default function StudentTable({
                         {student.teacher}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          student.active
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {student.active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="4"
                     className="px-6 py-4 text-center text-gray-500"
                   >
                     No students found
