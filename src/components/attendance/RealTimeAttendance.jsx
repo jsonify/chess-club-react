@@ -77,33 +77,60 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
   useEffect(() => {
     loadInitialData();
 
-    const channel = supabase
-      .channel('attendance-changes')
-      .on(
-        'postgres_changes',
-        { 
-          event: '*',
-          schema: 'public',
-          table: 'attendance_records'
-        },
-        handleRealtimeUpdate
-      )
-      .subscribe((status) => {
-        setIsConnected(status === 'SUBSCRIBED');
-      });
+  // Set up realtime subscriptions
+  const attendanceChannel = supabase
+    .channel('attendance-changes')
+    .on(
+      'postgres_changes',
+      { 
+        event: '*',
+        schema: 'public',
+        table: 'attendance_records'
+      },
+      handleRealtimeUpdate
+    )
+    .subscribe((status) => {
+      setIsConnected(status === 'SUBSCRIBED');
+    });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  // Add subscription for students table changes
+  const studentsChannel = supabase
+    .channel('students-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'students'
+      },
+      (payload) => {
+        if (payload.eventType === 'UPDATE') {
+          setStudents(prevStudents => 
+            prevStudents.map(student => 
+              student.id === payload.new.id 
+                ? { ...student, ...payload.new }
+                : student
+            )
+          );
+        }
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(attendanceChannel);
+    supabase.removeChannel(studentsChannel);
+  };
+}, []);
 
   const loadInitialData = async () => {
     try {
       setLoading(true);
       
+      // Explicitly request self_release field
       const { data: allStudents, error: studentsError } = await supabase
         .from('students')
-        .select('*')
+        .select('*, self_release')
         .order('grade')
         .order('last_name');
   
@@ -129,6 +156,7 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
         };
       });
   
+      // Set the students with their self_release status
       setStudents(allStudents || []);
       setAttendance(attendanceMap);
   
@@ -138,6 +166,32 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
       toast.error('Failed to load attendance data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSelfReleaseToggle = async (studentId, currentValue) => {
+    try {
+      // Update the database
+      const { error } = await supabase
+        .from('students')
+        .update({ self_release: !currentValue })
+        .eq('id', studentId);
+  
+      if (error) throw error;
+  
+      // Update local state
+      setStudents(prevStudents => 
+        prevStudents.map(student => 
+          student.id === studentId 
+            ? { ...student, self_release: !currentValue }
+            : student
+        )
+      );
+  
+      toast.success(`Self-release ${!currentValue ? 'enabled' : 'disabled'} successfully`);
+    } catch (error) {
+      console.error('Error updating self-release:', error);
+      toast.error('Failed to update self-release status');
     }
   };
 
@@ -270,9 +324,27 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
     }
 
     try {
+      // Find the student to check their self-release status
+      const student = students.find(s => s.id === studentId);
+      
+      if (!student) {
+        toast.error('Student not found');
+        return;
+      }
+
+      if (!student.self_release) {
+        const shouldProceed = window.confirm(
+          'This student is not marked for self-release. Are you sure you want to check them out?'
+        );
+        if (!shouldProceed) return;
+      }
+
       const { error: updateError } = await supabase
         .from('attendance_records')
-        .update({ check_out_time: new Date().toISOString() })
+        .update({ 
+          check_out_time: new Date().toISOString(),
+          self_released: student.self_release // Track whether it was a self-release checkout
+        })
         .eq('id', existingRecord.recordId);
 
       if (updateError) throw updateError;
@@ -281,11 +353,16 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
         ...prev,
         [studentId]: {
           ...prev[studentId],
-          checkedOut: true
+          checkedOut: true,
+          selfReleased: student.self_release
         }
       }));
 
-      toast.success('Student checked out');
+      toast.success(
+        student.self_release 
+          ? 'Student checked out (self-release)' 
+          : 'Student checked out'
+      );
     } catch (err) {
       console.error('Error toggling check-out:', err);
       toast.error('Failed to update attendance');
@@ -395,117 +472,164 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
       </div>
 
       <div>
-        {/* Desktop view */}
-        <div className="hidden md:block">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort('first_name')}
-                >
-                  First Name <SortIcon columnKey="first_name" />
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort('last_name')}
-                >
-                  Last Name <SortIcon columnKey="last_name" />
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort('grade')}
-                >
-                  Grade <SortIcon columnKey="grade" />
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                  onClick={() => requestSort('teacher')}
-                >
-                  Teacher <SortIcon columnKey="teacher" />
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Attendance
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredAndSortedStudents.map((student) => (
-                <tr
-                  key={student.id}
-                  className={`hover:bg-gray-50 ${
-                    attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
-                  }`}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {student.first_name}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {student.last_name}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{student.grade}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{student.teacher}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end space-x-4">
-                      <button
-                        onClick={() => toggleCheckIn(student.id)}
-                        disabled={!!selectedSession}
-                        className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                          attendance[student.id]?.checkedIn
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        } ${selectedSession ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        <span>In</span>
-                      </button>
-                      <button
-                        onClick={() => toggleCheckOut(student.id)}
-                        disabled={!attendance[student.id]?.checkedIn || !!selectedSession}
-                        className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                          attendance[student.id]?.checkedOut
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        } ${selectedSession ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        <span>Out</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile view */}
-        <div className="md:hidden p-4 space-y-4">
-          {filteredAndSortedStudents.map((student) => (
-            <StudentAttendanceCard
-              key={student.id}
-              student={student}
-              attendance={attendance[student.id]}
-              onCheckIn={toggleCheckIn}
-              onCheckOut={toggleCheckOut}
-              disabled={!!selectedSession}
-            />
-          ))}
-          
-          {filteredAndSortedStudents.length === 0 && (
-            <div className="text-center py-6 text-gray-500">
-              No students found matching your search criteria
+{/* Desktop view */}
+<div className="hidden md:block">
+  <table className="min-w-full divide-y divide-gray-200">
+    <thead className="bg-gray-50">
+      <tr>
+        <th
+          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+          onClick={() => requestSort('first_name')}
+        >
+          First Name <SortIcon columnKey="first_name" />
+        </th>
+        <th
+          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+          onClick={() => requestSort('last_name')}
+        >
+          Last Name <SortIcon columnKey="last_name" />
+        </th>
+        <th
+          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+          onClick={() => requestSort('grade')}
+        >
+          Grade <SortIcon columnKey="grade" />
+        </th>
+        <th
+          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+          onClick={() => requestSort('teacher')}
+        >
+          Teacher <SortIcon columnKey="teacher" />
+        </th>
+        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Attendance
+        </th>
+      </tr>
+    </thead>
+    <tbody className="bg-white divide-y divide-gray-200">
+      {filteredAndSortedStudents.map((student) => (
+        <tr
+          key={student.id}
+          className={`hover:bg-gray-50 ${
+            attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
+          }`}
+        >
+          <td className="px-6 py-4 whitespace-nowrap">
+            <div className="text-sm font-medium text-gray-900">
+              {student.first_name}
             </div>
-          )}
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <div className="text-sm font-medium text-gray-900">
+              {student.last_name}
+            </div>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+            <div className="text-sm text-gray-900">{student.grade}</div>
+          </td>
+          <td className="px-6 py-4 whitespace-nowrap">
+  <div className="flex items-center gap-2">
+    <div className="text-sm text-gray-900">{student.teacher}</div>
+    {student.self_release && (
+      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+        Self Release
+      </span>
+    )}
+  </div>
+</td>
+          <td className="px-6 py-4 whitespace-nowrap text-right">
+            <div className="flex items-center justify-end space-x-4">
+              <button
+                onClick={() => toggleCheckIn(student.id)}
+                disabled={!!selectedSession}
+                className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                  attendance[student.id]?.checkedIn
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                } ${selectedSession ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span>In</span>
+              </button>
+              <button
+                onClick={() => toggleCheckOut(student.id)}
+                disabled={!attendance[student.id]?.checkedIn || !!selectedSession}
+                className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                  attendance[student.id]?.checkedOut
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                } ${selectedSession || !attendance[student.id]?.checkedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={student.self_release ? "Student is approved for self-release" : ""}
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span>Out</span>
+                {student.self_release && (
+                  <span className="ml-1 text-xs bg-blue-100 text-blue-800 px-1 rounded">SR</span>
+                )}
+              </button>
+            </div>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
+{/* Mobile view */}
+<div className="md:hidden p-4 space-y-4">
+  {filteredAndSortedStudents.map((student) => (
+    <div
+      key={student.id}
+      className={`bg-white rounded-lg shadow p-4 ${
+        attendance[student.id]?.checkedIn ? 'border-l-4 border-blue-500' : ''
+      }`}
+    >
+      <div className="flex justify-between items-start">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium text-gray-900">
+              {student.first_name} {student.last_name}
+            </h3>
+            {student.self_release && (
+              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                SR
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            Grade {student.grade} - {student.teacher}
+          </p>
         </div>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => toggleCheckIn(student.id)}
+            disabled={!!selectedSession}
+            className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+              attendance[student.id]?.checkedIn
+                ? 'bg-green-100 text-green-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            } ${selectedSession ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <CheckCircle className="h-4 w-4" />
+            <span>In</span>
+          </button>
+          <button
+            onClick={() => toggleCheckOut(student.id)}
+            disabled={!attendance[student.id]?.checkedIn || !!selectedSession}
+            className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+              attendance[student.id]?.checkedOut
+                ? 'bg-green-100 text-green-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            } ${selectedSession || !attendance[student.id]?.checkedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <CheckCircle className="h-4 w-4" />
+            <span>Out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  ))}
+</div>
       </div>
     </div>
   );

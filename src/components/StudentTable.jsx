@@ -1,6 +1,7 @@
-// src/components/StudentTable.jsx
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Search } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 import StudentDetailModal from "./students/StudentDetailModal";
 
 export default function StudentTable({
@@ -10,6 +11,7 @@ export default function StudentTable({
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterGrade, setFilterGrade] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [sortConfig, setSortConfig] = useState({
     key: "first_name",
     direction: "asc",
@@ -26,8 +28,12 @@ export default function StudentTable({
       student.teacher?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesGrade =
       filterGrade === "all" || student.grade.toString() === filterGrade;
-    
-    return matchesSearch && matchesGrade;
+    const matchesStatus =
+      filterStatus === "all" ||
+      (filterStatus === "active" && student.active) ||
+      (filterStatus === "inactive" && !student.active);
+
+    return matchesSearch && matchesGrade && matchesStatus;
   });
 
   // Sort function
@@ -43,6 +49,8 @@ export default function StudentTable({
         return direction * (a.grade - b.grade);
       case "teacher":
         return direction * a.teacher.localeCompare(b.teacher);
+      case "status":
+        return direction * (a.active === b.active ? 0 : a.active ? -1 : 1);
       default:
         return 0;
     }
@@ -51,8 +59,7 @@ export default function StudentTable({
   const requestSort = (key) => {
     setSortConfig((current) => ({
       key,
-      direction:
-        current.key === key && current.direction === "asc" ? "desc" : "asc",
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
     }));
   };
 
@@ -63,6 +70,60 @@ export default function StudentTable({
 
   const handleDeleteStudent = (studentId) => {
     setStudents((prev) => prev.filter((student) => student.id !== studentId));
+  };
+
+  const handleSelfReleaseToggle = async (studentId, currentValue) => {
+    try {
+      const newValue = !currentValue;
+      console.log('Starting update with:', {
+        studentId,
+        currentValue,
+        newValue,
+      });
+  
+      // Explicit update with true/false value
+      const { error: updateError } = await supabase
+        .from('students')
+        .update({
+          self_release: newValue === true // Force boolean
+        })
+        .eq('id', studentId);
+  
+      if (updateError) {
+        console.error('Update error:', updateError);
+        throw updateError;
+      }
+  
+      // Now send a raw query to verify the change happened
+      const { data: verifyData, error: verifyError } = await supabase
+        .rpc('verify_student_self_release', {
+          student_id: studentId
+        });
+  
+      if (verifyError) {
+        console.error('Verify error:', verifyError);
+        throw verifyError;
+      }
+  
+      console.log('Verify result:', verifyData);
+  
+      // Update local state if change was successful
+      if (verifyData === newValue) {
+        setStudents(prevStudents => 
+          prevStudents.map(student => 
+            student.id === studentId 
+              ? { ...student, self_release: newValue }
+              : student
+          )
+        );
+        toast.success(`Self-release ${newValue ? 'enabled' : 'disabled'} successfully`);
+      } else {
+        throw new Error('Database update did not persist');
+      }
+    } catch (error) {
+      console.error('Error updating self-release:', error);
+      toast.error('Failed to update self-release status');
+    }
   };
 
   const SortIcon = ({ columnKey }) => {
@@ -104,6 +165,15 @@ export default function StudentTable({
                   </option>
                 ))}
               </select>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="border rounded-lg px-3 py-2"
+              >
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
             </div>
           </div>
         </div>
@@ -140,6 +210,19 @@ export default function StudentTable({
                 >
                   Teacher <SortIcon columnKey="teacher" />
                 </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  Self Release
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                  onClick={() => requestSort("status")}
+                >
+                  Status <SortIcon columnKey="status" />
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -148,7 +231,10 @@ export default function StudentTable({
                   <tr
                     key={student.id}
                     className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => handleRowClick(student)}
+                    onClick={(e) => {
+                      if (e.target.type === 'checkbox') return;
+                      handleRowClick(student);
+                    }}
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
@@ -170,12 +256,36 @@ export default function StudentTable({
                         {student.teacher}
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={student.self_release || false}
+                          onChange={() => handleSelfReleaseToggle(student.id, student.self_release)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                        />
+                        <span className="ml-2 text-sm text-gray-500">
+                          {student.self_release ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          student.active
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {student.active ? "Active" : "Inactive"}
+                      </span>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td
-                    colSpan="4"
+                    colSpan="6"
                     className="px-6 py-4 text-center text-gray-500"
                   >
                     No students found
