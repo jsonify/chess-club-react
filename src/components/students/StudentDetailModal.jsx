@@ -1,5 +1,6 @@
+// src/components/StudentDetailModal.jsx
 import { useState } from 'react';
-import { X, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { X, Trash2, Loader2, Mail, Phone, User, GraduationCap, School } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 
@@ -23,10 +24,7 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
         .delete()
         .eq('student_id', student.id);
 
-      if (attendanceError) {
-        console.error('Error deleting attendance records:', attendanceError);
-        throw attendanceError;
-      }
+      if (attendanceError) throw attendanceError;
 
       // 2. Delete any tournament matches
       const { error: matchesError } = await supabase
@@ -34,10 +32,7 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
         .delete()
         .or(`player1_id.eq.${student.id},player2_id.eq.${student.id}`);
 
-      if (matchesError) {
-        console.error('Error deleting matches:', matchesError);
-        throw matchesError;
-      }
+      if (matchesError) throw matchesError;
 
       // 3. Finally delete the student
       const { error: studentError } = await supabase
@@ -45,16 +40,11 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
         .delete()
         .eq('id', student.id);
 
-      if (studentError) {
-        console.error('Error deleting student:', studentError);
-        throw studentError;
-      }
+      if (studentError) throw studentError;
 
       toast.success('Student deleted successfully');
-      
-      // Make sure to call these functions in this order
-      onDelete(student.id); // Update parent component state first
-      onClose(); // Then close the modal
+      onDelete(student.id);
+      onClose();
       
     } catch (error) {
       console.error('Delete operation failed:', error);
@@ -63,6 +53,49 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     }
+  };
+
+  const ContactSection = ({ title, name, phone, email, relationship }) => {
+    if (!name && !phone && !email) return null;
+    
+    return (
+      <div className="border-t border-gray-200 pt-4 mt-4">
+        <h4 className="text-sm font-medium text-gray-900 mb-3">{title}</h4>
+        <div className="space-y-2">
+          {name && (
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-gray-400" />
+              <p className="text-sm text-gray-900">{name}</p>
+            </div>
+          )}
+          {relationship && (
+            <p className="text-sm text-gray-500 ml-6">({relationship})</p>
+          )}
+          {phone && (
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-gray-400" />
+              <a 
+                href={`tel:${phone}`}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                {phone}
+              </a>
+            </div>
+          )}
+          {email && (
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-gray-400" />
+              <a 
+                href={`mailto:${email}`}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                {email}
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -91,30 +124,77 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
             </div>
           </div>
 
-          {/* Rest of modal content */}
+          {/* Student Information */}
           <div className="px-4 py-5 sm:p-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
+              {/* Basic Information */}
               <div>
-                <label className="block text-sm font-medium text-gray-500">Name</label>
-                <p className="mt-1 text-sm text-gray-900">{student.first_name} {student.last_name}</p>
+                <h4 className="text-sm font-medium text-gray-900 mb-3">Basic Information</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-900">
+                        {student.first_name} {student.last_name}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-900">Grade {student.grade}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <School className="h-4 w-4 text-gray-400" />
+                    <div>
+                      <p className="text-sm text-gray-900">{student.teacher}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      student.active
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {student.active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500">Grade</label>
-                <p className="mt-1 text-sm text-gray-900">{student.grade}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500">Teacher</label>
-                <p className="mt-1 text-sm text-gray-900">{student.teacher}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500">Status</label>
-                <span className={`inline-flex mt-1 items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  student.active
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {student.active ? 'Active' : 'Inactive'}
-                </span>
+
+              {/* Contact Information */}
+              <ContactSection
+                title="Primary Contact"
+                name={student.contact1_name}
+                phone={student.contact1_phone}
+                email={student.contact1_email}
+                relationship={student.contact1_relationship}
+              />
+
+              <ContactSection
+                title="Secondary Contact"
+                name={student.contact2_name}
+                phone={student.contact2_phone}
+                email={student.contact2_email}
+                relationship={student.contact2_relationship}
+              />
+
+              {/* Additional Settings */}
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <h4 className="text-sm font-medium text-gray-900 mb-3">Additional Settings</h4>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="self-release"
+                    checked={student.self_release || false}
+                    disabled
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="self-release" className="text-sm text-gray-900">
+                    Self Release Approved
+                  </label>
+                </div>
               </div>
             </div>
           </div>
