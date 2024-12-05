@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { isWednesday, getNextWednesday } from '@/lib/utils';
 
 /**
  * Convert a date to Pacific time and return date string in YYYY-MM-DD format
@@ -23,48 +24,63 @@ const getPacificTime = () => {
 };
 
 export async function getOrCreateSession(date) {
-  // First convert the date to Pacific time to ensure correct date matching
-  const pacificDate = new Date(date).toLocaleDateString('en-US', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  });
+  // Determine the appropriate session date (today if Wednesday, otherwise next Wednesday)
+  const pacificDate = new Date(date.toLocaleString('en-US', {
+    timeZone: 'America/Los_Angeles'
+  }));
   
-  // Parse the Pacific time date parts
-  const [month, day, year] = pacificDate.split('/');
+  // Get the session date based on whether today is Wednesday
+  const sessionDate = isWednesday(pacificDate) ? pacificDate : getNextWednesday();
+  
+  // Format date for database (YYYY-MM-DD)
+  const year = sessionDate.getFullYear();
+  const month = String(sessionDate.getMonth() + 1).padStart(2, '0');
+  const day = String(sessionDate.getDate()).padStart(2, '0');
   const formattedDate = `${year}-${month}-${day}`;
 
   try {
-    // Check for existing session
-    const { data: existingSession } = await supabase
+    // First try to get the existing session
+    const { data, error } = await supabase
       .from('attendance_sessions')
       .select('*')
       .eq('session_date', formattedDate)
-      .single();
+      .eq('cancelled', false);
 
-    if (existingSession) return existingSession;
-
-    // Only create a new session if it's for today or a past date
-    const today = new Date();
-    const sessionDate = new Date(formattedDate);
-    
-    if (sessionDate > today) {
-      throw new Error('Cannot create sessions for future dates');
+    // If we found a session, return it
+    if (data && data.length > 0) {
+      return data[0];
     }
 
-    // Create new session
-    const { data: newSession, error } = await supabase
+    // No session found, create one
+    const { data: newSession, error: insertError } = await supabase
       .from('attendance_sessions')
       .insert([{
         session_date: formattedDate,
         start_time: '15:30',
-        end_time: '16:30'
+        end_time: '16:30',
+        timezone: 'America/Los_Angeles',
+        cancelled: false
       }])
       .select()
       .single();
 
-    if (error) throw error;
+    if (insertError) {
+      // If insert failed due to race condition, try fetching again
+      if (insertError.code === '23505') {
+        const { data: retryData, error: retryError } = await supabase
+          .from('attendance_sessions')
+          .select('*')
+          .eq('session_date', formattedDate)
+          .eq('cancelled', false);
+
+        if (retryError) throw retryError;
+        if (retryData && retryData.length > 0) {
+          return retryData[0];
+        }
+      }
+      throw insertError;
+    }
+
     return newSession;
   } catch (error) {
     console.error('Error managing session:', error);

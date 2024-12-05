@@ -167,39 +167,45 @@ export default function RealTimeAttendance({
   const loadInitialData = async () => {
     try {
       setLoading(true);
-
+  
       // Explicitly request self_release field
       const { data: allStudents, error: studentsError } = await supabase
         .from("students")
         .select("*, self_release")
         .order("grade")
         .order("last_name");
-
+  
       if (studentsError) throw studentsError;
-
+  
       const session = await getOrCreateSession(today);
       setCurrentSession(session);
       setSelectedSession(null);
-
-      const { data: attendanceRecords, error: attendanceError } = await supabase
-        .from("attendance_records")
-        .select("*")
-        .eq("session_id", session.id);
-
-      if (attendanceError) throw attendanceError;
-
-      const attendanceMap = {};
-      attendanceRecords?.forEach((record) => {
-        attendanceMap[record.student_id] = {
-          checkedIn: !!record.check_in_time,
-          checkedOut: !!record.check_out_time,
-          recordId: record.id,
-        };
-      });
-
+  
+      // Only fetch attendance records for real sessions
+      if (!session.is_future) {
+        const { data: attendanceRecords, error: attendanceError } = await supabase
+          .from("attendance_records")
+          .select("*")
+          .eq("session_id", session.id);
+  
+        if (attendanceError) throw attendanceError;
+  
+        const attendanceMap = {};
+        attendanceRecords?.forEach((record) => {
+          attendanceMap[record.student_id] = {
+            checkedIn: !!record.check_in_time,
+            checkedOut: !!record.check_out_time,
+            recordId: record.id,
+          };
+        });
+  
+        setAttendance(attendanceMap);
+      } else {
+        setAttendance({});
+      }
+  
       // Set the students with their self_release status
       setStudents(allStudents || []);
-      setAttendance(attendanceMap);
     } catch (err) {
       console.error("Error loading data:", err);
       setError(err.message);
@@ -516,13 +522,11 @@ export default function RealTimeAttendance({
       </div>
 
       <div className="px-4 py-2">
-        <SessionHistory
-          onSessionSelect={handleSessionSelect}
-          currentSession={currentSession}
-        />
-      </div>
-
-      {date || selectedSession ? (
+      <SessionHistory
+        onSessionSelect={handleSessionSelect}
+        currentSession={currentSession}
+      />
+    </div>
         <div>
           {/* Desktop view */}
           <div className="hidden md:block">
@@ -710,14 +714,6 @@ export default function RealTimeAttendance({
             ))}
           </div>
         </div>
-      ) : (
-        <div className="p-8 text-center text-gray-500">
-          <p>
-            Attendance tracking will be available during the next session on{" "}
-            {nextSessionDate}
-          </p>
-        </div>
-      )}
     </div>
   );
 }

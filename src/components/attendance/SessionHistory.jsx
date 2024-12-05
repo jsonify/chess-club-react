@@ -17,6 +17,11 @@ export default function SessionHistory({ onSessionSelect }) {
     try {
       setLoading(true);
       
+      const today = new Date().toLocaleString('en-US', {
+        timeZone: 'America/Los_Angeles'
+      });
+      const todayFormatted = new Date(today).toISOString().split('T')[0];
+      
       const { data: sessions, error: sessionsError } = await supabase
         .from('attendance_sessions')
         .select(`
@@ -26,16 +31,17 @@ export default function SessionHistory({ onSessionSelect }) {
           attendance_records(count)
         `)
         .eq('cancelled', false)
+        .lt('session_date', todayFormatted) // Only get sessions before today
         .order('session_date', { ascending: false })
         .limit(10);
-
+  
       if (sessionsError) throw sessionsError;
-
+  
       const processedSessions = sessions?.map(session => ({
         ...session,
         attendanceCount: session.attendance_records[0]?.count || 0
       }));
-
+  
       setSessions(processedSessions || []);
       
     } catch (err) {
