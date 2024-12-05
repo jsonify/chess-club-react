@@ -359,29 +359,22 @@ export default function RealTimeAttendance({
       toast.error("Cannot modify previous sessions");
       return;
     }
-
+  
     const existingRecord = attendance[studentId];
     if (!existingRecord?.checkedIn) {
       toast.error("Student must be checked in first");
       return;
     }
-
+  
     try {
       // Find the student to check their self-release status
       const student = students.find((s) => s.id === studentId);
-
+  
       if (!student) {
         toast.error("Student not found");
         return;
       }
-
-      if (!student.self_release) {
-        const shouldProceed = window.confirm(
-          "This student is not marked for self-release. Are you sure you want to check them out?"
-        );
-        if (!shouldProceed) return;
-      }
-
+  
       const { error: updateError } = await supabase
         .from("attendance_records")
         .update({
@@ -389,9 +382,9 @@ export default function RealTimeAttendance({
           self_released: student.self_release, // Track whether it was a self-release checkout
         })
         .eq("id", existingRecord.recordId);
-
+  
       if (updateError) throw updateError;
-
+  
       setAttendance((prev) => ({
         ...prev,
         [studentId]: {
@@ -400,7 +393,7 @@ export default function RealTimeAttendance({
           selfReleased: student.self_release,
         },
       }));
-
+  
       toast.success(
         student.self_release
           ? "Student checked out (self-release)"
