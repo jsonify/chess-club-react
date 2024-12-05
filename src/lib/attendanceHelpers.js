@@ -1,60 +1,41 @@
-// src/lib/attendanceHelpers.js
 import { supabase } from './supabase';
 
-export const fetchStudentsWithAttendance = async (sessionId) => {
-  try {
-    // First, get all active students
-    const { data: students, error: studentsError } = await supabase
-      .from('students')
-      .select('*')
-      .eq('active', true)
-      .order('grade')
-      .order('last_name');
-
-    if (studentsError) throw studentsError;
-
-    // Then get attendance records for the session
-    const { data: attendanceRecords, error: attendanceError } = await supabase
-      .from('student_attendance')
-      .select('*')
-      .eq('session_id', sessionId);
-
-    if (attendanceError) throw attendanceError;
-
-    // Create a map of attendance records by student ID
-    const attendanceMap = (attendanceRecords || []).reduce((acc, record) => {
-      acc[record.student_id] = record;
-      return acc;
-    }, {});
-
-    // Return both students and their attendance records
-    return {
-      students: students || [],
-      attendance: attendanceMap
-    };
-  } catch (error) {
-    console.error('Error fetching students with attendance:', error);
-    throw error;
-  }
+/**
+ * Convert a date to Pacific time and return date string in YYYY-MM-DD format
+ */
+const toPacificDate = (date) => {
+  return date.toLocaleDateString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).split('/').reverse().join('-');
 };
 
-export const getOrCreateSession = async (date) => {
-  const getNextWednesday = (from) => {
-    const result = new Date(from);
-    result.setDate(result.getDate() + ((3 + 7 - result.getDay()) % 7));
-    return result;
-  };
+/**
+ * Get current time in Pacific timezone in HH:mm:ss format
+ */
+const getPacificTime = () => {
+  return new Date().toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour12: false,
+  });
+};
+
+export async function getOrCreateSession(date) {
+  // First convert the date to Pacific time to ensure correct date matching
+  const pacificDate = new Date(date).toLocaleDateString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  
+  // Parse the Pacific time date parts
+  const [month, day, year] = pacificDate.split('/');
+  const formattedDate = `${year}-${month}-${day}`;
 
   try {
-    // Determine the correct session date
-    const targetDate = new Date(date);
-    const sessionDate = targetDate.getDay() === 3 
-      ? targetDate 
-      : getNextWednesday(targetDate);
-
-    // Format the date as YYYY-MM-DD for database
-    const formattedDate = sessionDate.toISOString().split('T')[0];
-
     // Check for existing session
     const { data: existingSession } = await supabase
       .from('attendance_sessions')
@@ -64,7 +45,15 @@ export const getOrCreateSession = async (date) => {
 
     if (existingSession) return existingSession;
 
-    // Create new session if one doesn't exist
+    // Only create a new session if it's for today or a past date
+    const today = new Date();
+    const sessionDate = new Date(formattedDate);
+    
+    if (sessionDate > today) {
+      throw new Error('Cannot create sessions for future dates');
+    }
+
+    // Create new session
     const { data: newSession, error } = await supabase
       .from('attendance_sessions')
       .insert([{
@@ -81,46 +70,140 @@ export const getOrCreateSession = async (date) => {
     console.error('Error managing session:', error);
     throw error;
   }
-};
+}
 
-export const updateAttendanceRecord = async (sessionId, studentId, status) => {
+/**
+ * Handle check-in for a student
+ */
+export const handleCheckIn = async (supabase, studentId, currentSession, attendance) => {
+  const isCheckedIn = attendance[studentId]?.checkedIn;
+  const pacificTime = getPacificTime();
+
   try {
-    // Check for existing record
-    const { data: existingRecord } = await supabase
-      .from('student_attendance')
-      .select('*')
-      .eq('session_id', sessionId)
-      .eq('student_id', studentId)
-      .single();
+    if (isCheckedIn) {
+      // Remove check-in
+      const recordId = attendance[studentId].recordId;
+      const { error: deleteError } = await supabase
+        .from('attendance_records')
+        .delete()
+        .eq('id', recordId);
 
-    if (existingRecord) {
-      // Update existing record
-      const { data: updatedRecord, error } = await supabase
-        .from('student_attendance')
-        .update({ attendance_status: status })
-        .eq('id', existingRecord.id)
+      if (deleteError) throw deleteError;
+
+      return {
+        type: 'remove',
+        studentId
+      };
+    } else {
+      // Create new check-in
+      const { data: record, error: insertError } = await supabase
+        .from('attendance_records')
+        .insert([{
+          student_id: studentId,
+          session_id: currentSession.id,
+          check_in_time: new Date().toISOString(),
+          pacific_check_in_time: pacificTime
+        }])
         .select()
         .single();
 
-      if (error) throw error;
-      return updatedRecord;
+      if (insertError) throw insertError;
+
+      return {
+        type: 'checkin',
+        studentId,
+        recordId: record.id
+      };
     }
-
-    // Create new record
-    const { data: newRecord, error } = await supabase
-      .from('student_attendance')
-      .insert([{
-        session_id: sessionId,
-        student_id: studentId,
-        attendance_status: status
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return newRecord;
   } catch (error) {
-    console.error('Error updating attendance record:', error);
+    console.error('Error handling check-in:', error);
     throw error;
+  }
+};
+
+/**
+ * Handle check-out for a student
+ */
+export const handleCheckOut = async (supabase, studentId, recordId) => {
+  const pacificTime = getPacificTime();
+
+  try {
+    const { error: updateError } = await supabase
+      .from('attendance_records')
+      .update({
+        check_out_time: new Date().toISOString(),
+        pacific_check_out_time: pacificTime
+      })
+      .eq('id', recordId);
+
+    if (updateError) throw updateError;
+
+    return {
+      type: 'checkout',
+      studentId
+    };
+  } catch (error) {
+    console.error('Error handling check-out:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update attendance state based on action results
+ */
+export const updateAttendanceState = (prevState, action) => {
+  switch (action.type) {
+    case 'remove':
+      const newState = { ...prevState };
+      delete newState[action.studentId];
+      return newState;
+
+    case 'checkin':
+      return {
+        ...prevState,
+        [action.studentId]: {
+          checkedIn: true,
+          checkedOut: false,
+          recordId: action.recordId
+        }
+      };
+
+    case 'checkout':
+      return {
+        ...prevState,
+        [action.studentId]: {
+          ...prevState[action.studentId],
+          checkedOut: true
+        }
+      };
+
+    default:
+      return prevState;
+  }
+};
+
+/**
+ * Update stats state based on action results
+ */
+export const updateStatsState = (prevStats, action, totalStudents) => {
+  switch (action.type) {
+    case 'remove':
+      const newPresentCount = Math.max(0, prevStats.presentToday - 1);
+      return {
+        ...prevStats,
+        presentToday: newPresentCount,
+        attendanceRate: Math.round((newPresentCount / totalStudents) * 100)
+      };
+
+    case 'checkin':
+      const increasedCount = prevStats.presentToday + 1;
+      return {
+        ...prevStats,
+        presentToday: increasedCount,
+        attendanceRate: Math.round((increasedCount / totalStudents) * 100)
+      };
+
+    default:
+      return prevStats;
   }
 };

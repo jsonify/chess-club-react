@@ -8,7 +8,11 @@ import { toast } from 'sonner';
 import StudentAttendanceCard from './_StudentAttendanceCard';
 import SessionHistory from './SessionHistory';
 
-export default function RealTimeAttendance({ onStatsChange = () => {} }) {
+export default function RealTimeAttendance({ 
+  date,
+  onStatsChange,
+  nextSessionDate
+}) {
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -421,16 +425,18 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
                       Return to Today
                     </button>
                   </div>
+                ) : nextSessionDate ? (
+                  <>Next Session: {nextSessionDate}</>
                 ) : (
-                  <>
-                    {isWednesday(today)
-                      ? "Today's Attendance"
-                      : "Next Wednesday's Attendance"} ({formattedDisplayDate})
-                  </>
+                  "Today's Attendance"
                 )}
               </h2>
-              {!selectedSession }
-
+              {!selectedSession && !nextSessionDate && isConnected && (
+                <Wifi className="h-5 w-5 text-green-500" title="Real-time updates connected" />
+              )}
+              {!selectedSession && !nextSessionDate && !isConnected && (
+                <WifiOff className="h-5 w-5 text-red-500" title="Real-time updates disconnected" />
+              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-4 w-full sm:w-auto">
@@ -459,172 +465,177 @@ export default function RealTimeAttendance({ onStatsChange = () => {} }) {
           </div>
         </div>
       </div>
-
+  
       <div className="px-4 py-2">
         <SessionHistory 
           onSessionSelect={handleSessionSelect}
           currentSession={currentSession}
         />
       </div>
-
-      <div>
-{/* Desktop view */}
-<div className="hidden md:block">
-  <table className="min-w-full divide-y divide-gray-200">
-    <thead className="bg-gray-50">
-      <tr>
-        <th
-          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-          onClick={() => requestSort('first_name')}
-        >
-          First Name <SortIcon columnKey="first_name" />
-        </th>
-        <th
-          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-          onClick={() => requestSort('last_name')}
-        >
-          Last Name <SortIcon columnKey="last_name" />
-        </th>
-        <th
-          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-          onClick={() => requestSort('grade')}
-        >
-          Grade <SortIcon columnKey="grade" />
-        </th>
-        <th
-          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-          onClick={() => requestSort('teacher')}
-        >
-          Teacher <SortIcon columnKey="teacher" />
-        </th>
-        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-          Attendance
-        </th>
-      </tr>
-    </thead>
-    <tbody className="bg-white divide-y divide-gray-200">
-      {filteredAndSortedStudents.map((student) => (
-        <tr
-          key={student.id}
-          className={`hover:bg-gray-50 ${
-            attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
-          }`}
-        >
-          <td className="px-6 py-4 whitespace-nowrap">
-            <div className="text-sm font-medium text-gray-900">
-              {student.first_name}
-            </div>
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap">
-            <div className="text-sm font-medium text-gray-900">
-              {student.last_name}
-            </div>
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap">
-            <div className="text-sm text-gray-900">{student.grade}</div>
-          </td>
-          <td className="px-6 py-4 whitespace-nowrap">
-  <div className="flex items-center gap-2">
-    <div className="text-sm text-gray-900">{student.teacher}</div>
-    {student.self_release && (
-      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
-        Self Release
-      </span>
-    )}
-  </div>
-</td>
-          <td className="px-6 py-4 whitespace-nowrap text-right">
-            <div className="flex items-center justify-end space-x-4">
-              <button
-                onClick={() => toggleCheckIn(student.id)}
-                disabled={!!selectedSession}
-                className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                  attendance[student.id]?.checkedIn
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                } ${selectedSession ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <CheckCircle className="h-4 w-4" />
-                <span>In</span>
-              </button>
-              <button
-                onClick={() => toggleCheckOut(student.id)}
-                disabled={!attendance[student.id]?.checkedIn || !!selectedSession}
-                className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-                  attendance[student.id]?.checkedOut
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                } ${selectedSession || !attendance[student.id]?.checkedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-                title={student.self_release ? "Student is approved for self-release" : ""}
-              >
-                <CheckCircle className="h-4 w-4" />
-                <span>Out</span>
-                {student.self_release }
-              </button>
-            </div>
-          </td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
-</div>
-
-{/* Mobile view */}
-<div className="md:hidden p-4 space-y-4">
-  {filteredAndSortedStudents.map((student) => (
-    <div
-      key={student.id}
-      className={`bg-white rounded-lg shadow p-4 ${
-        attendance[student.id]?.checkedIn ? 'border-l-4 border-blue-500' : ''
-      }`}
-    >
-      <div className="flex justify-between items-start">
+  
+      {(date || selectedSession) ? (
         <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-medium text-gray-900">
-              {student.first_name} {student.last_name}
-            </h3>
-            {student.self_release && (
-              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
-                SR
-              </span>
-            )}
+          {/* Desktop view */}
+          <div className="hidden md:block">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                    onClick={() => requestSort('first_name')}
+                  >
+                    First Name <SortIcon columnKey="first_name" />
+                  </th>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                    onClick={() => requestSort('last_name')}
+                  >
+                    Last Name <SortIcon columnKey="last_name" />
+                  </th>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                    onClick={() => requestSort('grade')}
+                  >
+                    Grade <SortIcon columnKey="grade" />
+                  </th>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                    onClick={() => requestSort('teacher')}
+                  >
+                    Teacher <SortIcon columnKey="teacher" />
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Attendance
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredAndSortedStudents.map((student) => (
+                  <tr
+                    key={student.id}
+                    className={`hover:bg-gray-50 ${
+                      attendance[student.id]?.checkedIn ? 'bg-blue-50' : ''
+                    }`}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {student.first_name}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {student.last_name}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{student.grade}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm text-gray-900">{student.teacher}</div>
+                        {student.self_release && (
+                          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                            Self Release
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end space-x-4">
+                        <button
+                          onClick={() => toggleCheckIn(student.id)}
+                          disabled={!!selectedSession}
+                          className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                            attendance[student.id]?.checkedIn
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          } ${selectedSession ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          <span>In</span>
+                        </button>
+                        <button
+                          onClick={() => toggleCheckOut(student.id)}
+                          disabled={!attendance[student.id]?.checkedIn || !!selectedSession}
+                          className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                            attendance[student.id]?.checkedOut
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          } ${selectedSession || !attendance[student.id]?.checkedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          title={student.self_release ? "Student is approved for self-release" : ""}
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          <span>Out</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <p className="mt-1 text-sm text-gray-500">
-            Grade {student.grade} - {student.teacher}
-          </p>
+  
+          {/* Mobile view */}
+          <div className="md:hidden p-4 space-y-4">
+            {filteredAndSortedStudents.map((student) => (
+              <div
+                key={student.id}
+                className={`bg-white rounded-lg shadow p-4 ${
+                  attendance[student.id]?.checkedIn ? 'border-l-4 border-blue-500' : ''
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-medium text-gray-900">
+                        {student.first_name} {student.last_name}
+                      </h3>
+                      {student.self_release && (
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                          SR
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Grade {student.grade} - {student.teacher}
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => toggleCheckIn(student.id)}
+                      disabled={!!selectedSession}
+                      className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                        attendance[student.id]?.checkedIn
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      } ${selectedSession ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      <span>In</span>
+                    </button>
+                    <button
+                      onClick={() => toggleCheckOut(student.id)}
+                      disabled={!attendance[student.id]?.checkedIn || !!selectedSession}
+                      className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
+                        attendance[student.id]?.checkedOut
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      } ${selectedSession || !attendance[student.id]?.checkedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      <span>Out</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => toggleCheckIn(student.id)}
-            disabled={!!selectedSession}
-            className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-              attendance[student.id]?.checkedIn
-                ? 'bg-green-100 text-green-700'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            } ${selectedSession ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <CheckCircle className="h-4 w-4" />
-            <span>In</span>
-          </button>
-          <button
-            onClick={() => toggleCheckOut(student.id)}
-            disabled={!attendance[student.id]?.checkedIn || !!selectedSession}
-            className={`flex items-center space-x-1 px-3 py-1 rounded-md transition-colors ${
-              attendance[student.id]?.checkedOut
-                ? 'bg-green-100 text-green-700'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            } ${selectedSession || !attendance[student.id]?.checkedIn ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <CheckCircle className="h-4 w-4" />
-            <span>Out</span>
-          </button>
+      ) : (
+        <div className="p-8 text-center text-gray-500">
+          <p>Attendance tracking will be available during the next session on {nextSessionDate}</p>
         </div>
-      </div>
+      )}
     </div>
-  ))}
-</div>
-      </div>
-    </div>
-  );
+  )
 }

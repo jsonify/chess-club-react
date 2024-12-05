@@ -1,23 +1,91 @@
-// src/components/dashboard/DashboardStats.jsx
+import { useEffect, useState } from 'react';
 import { Users, CheckCircle, Award } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { isDuringClubHours, formatDateForDB } from '@/lib/utils';
 
-export default function DashboardStats({ stats, loading }) {
+export default function DashboardStats() {
+  const [stats, setStats] = useState({
+    totalStudents: 0,
+    presentToday: 0,
+    attendanceRate: 0
+  });
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      // Get total active students
+      const { data: students, error: studentsError } = await supabase
+        .from('students')
+        .select('id')
+        .eq('active', true);
+
+      if (studentsError) throw studentsError;
+
+      const totalStudents = students?.length || 0;
+
+      // Only fetch attendance if we're in an active session
+      if (isDuringClubHours(new Date())) {
+        // Get today's session attendance
+        const today = formatDateForDB(new Date());
+        const { data: session } = await supabase
+          .from('attendance_sessions')
+          .select('id')
+          .eq('session_date', today)
+          .single();
+
+        if (session) {
+          const { data: attendance } = await supabase
+            .from('attendance_records')
+            .select('id')
+            .eq('session_id', session.id)
+            .not('check_in_time', 'is', null);
+
+          const presentToday = attendance?.length || 0;
+          
+          setStats({
+            totalStudents,
+            presentToday,
+            attendanceRate: totalStudents ? Math.round((presentToday / totalStudents) * 100) : 0
+          });
+        } else {
+          setStats({
+            totalStudents,
+            presentToday: 0,
+            attendanceRate: 0
+          });
+        }
+      } else {
+        // Outside of club hours, show total students but zero attendance
+        setStats({
+          totalStudents,
+          presentToday: 0,
+          attendanceRate: 0
+        });
+      }
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
       <StatCard
         icon={<Users className="h-6 w-6" />}
         title="Total Students"
-        value={loading ? '-' : stats.totalStudents}
+        value={stats.totalStudents}
       />
       <StatCard
         icon={<CheckCircle className="h-6 w-6" />}
         title="Present Today"
-        value={loading ? '-' : stats.presentToday}
+        value={stats.presentToday}
       />
       <StatCard
         icon={<Award className="h-6 w-6" />}
         title="Attendance Rate"
-        value={loading ? '-' : `${stats.attendanceRate}%`}
+        value={`${stats.attendanceRate}%`}
       />
     </div>
   );
