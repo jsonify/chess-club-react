@@ -6,7 +6,7 @@ export default function Sidebar({ open, onClose }) {
   const location = useLocation();
 
   const links = [
-    { href: '/', label: 'Dashboard' },
+    { href: '/', label: 'Attendance' },
     { href: '/registration', label: 'Registration' },
     { href: '/tournaments', label: 'Tournaments' },
     { href: '/students', label: 'Students' },

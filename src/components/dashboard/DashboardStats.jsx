@@ -1,3 +1,4 @@
+// src/components/dashboard/DashboardStats.jsx
 import { useEffect, useState } from 'react';
 import { Users, CheckCircle, Award } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -16,7 +17,6 @@ export default function DashboardStats() {
 
   const loadStats = async () => {
     try {
-      // Get total active students
       const { data: students, error: studentsError } = await supabase
         .from('students')
         .select('id')
@@ -26,9 +26,7 @@ export default function DashboardStats() {
 
       const totalStudents = students?.length || 0;
 
-      // Only fetch attendance if we're in an active session
       if (isDuringClubHours(new Date())) {
-        // Get today's session attendance
         const today = formatDateForDB(new Date());
         const { data: session } = await supabase
           .from('attendance_sessions')
@@ -50,15 +48,8 @@ export default function DashboardStats() {
             presentToday,
             attendanceRate: totalStudents ? Math.round((presentToday / totalStudents) * 100) : 0
           });
-        } else {
-          setStats({
-            totalStudents,
-            presentToday: 0,
-            attendanceRate: 0
-          });
         }
       } else {
-        // Outside of club hours, show total students but zero attendance
         setStats({
           totalStudents,
           presentToday: 0,
@@ -71,7 +62,7 @@ export default function DashboardStats() {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6 hidden md:grid">
       <StatCard
         icon={<Users className="h-6 w-6" />}
         title="Total Students"
@@ -101,4 +92,4 @@ const StatCard = ({ icon, title, value }) => {
       <p className="mt-2 text-3xl font-semibold">{value}</p>
     </div>
   );
-};
+}

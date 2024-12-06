@@ -59,7 +59,8 @@ export default function StudentTable({
   const requestSort = (key) => {
     setSortConfig((current) => ({
       key,
-      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
+      direction:
+        current.key === key && current.direction === "asc" ? "desc" : "asc",
     }));
   };
 
@@ -75,54 +76,58 @@ export default function StudentTable({
   const handleSelfReleaseToggle = async (studentId, currentValue) => {
     try {
       const newValue = !currentValue;
-      console.log('Starting update with:', {
+      console.log("Starting update with:", {
         studentId,
         currentValue,
         newValue,
       });
-  
+
       // Explicit update with true/false value
       const { error: updateError } = await supabase
-        .from('students')
+        .from("students")
         .update({
-          self_release: newValue === true // Force boolean
+          self_release: newValue === true, // Force boolean
         })
-        .eq('id', studentId);
-  
+        .eq("id", studentId);
+
       if (updateError) {
-        console.error('Update error:', updateError);
+        console.error("Update error:", updateError);
         throw updateError;
       }
-  
+
       // Now send a raw query to verify the change happened
-      const { data: verifyData, error: verifyError } = await supabase
-        .rpc('verify_student_self_release', {
-          student_id: studentId
-        });
-  
+      const { data: verifyData, error: verifyError } = await supabase.rpc(
+        "verify_student_self_release",
+        {
+          student_id: studentId,
+        }
+      );
+
       if (verifyError) {
-        console.error('Verify error:', verifyError);
+        console.error("Verify error:", verifyError);
         throw verifyError;
       }
-  
-      console.log('Verify result:', verifyData);
-  
+
+      console.log("Verify result:", verifyData);
+
       // Update local state if change was successful
       if (verifyData === newValue) {
-        setStudents(prevStudents => 
-          prevStudents.map(student => 
-            student.id === studentId 
+        setStudents((prevStudents) =>
+          prevStudents.map((student) =>
+            student.id === studentId
               ? { ...student, self_release: newValue }
               : student
           )
         );
-        toast.success(`Self-release ${newValue ? 'enabled' : 'disabled'} successfully`);
+        toast.success(
+          `Self-release ${newValue ? "enabled" : "disabled"} successfully`
+        );
       } else {
-        throw new Error('Database update did not persist');
+        throw new Error("Database update did not persist");
       }
     } catch (error) {
-      console.error('Error updating self-release:', error);
-      toast.error('Failed to update self-release status');
+      console.error("Error updating self-release:", error);
+      toast.error("Failed to update self-release status");
     }
   };
 
@@ -141,6 +146,7 @@ export default function StudentTable({
     <>
       <div className="bg-white shadow rounded-lg">
         <div className="p-4 border-b border-gray-200">
+          {/* Search and filters section */}
           <div className="flex flex-col sm:flex-row gap-4 justify-between">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -177,9 +183,9 @@ export default function StudentTable({
             </div>
           </div>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+  
+        {/* Desktop Table */}
+          <table className="min-w-full divide-y divide-gray-200 hidden md:table">
             <thead className="bg-gray-50">
               <tr>
                 <th
@@ -232,7 +238,7 @@ export default function StudentTable({
                     key={student.id}
                     className="hover:bg-gray-50 cursor-pointer"
                     onClick={(e) => {
-                      if (e.target.type === 'checkbox') return;
+                      if (e.target.type === "checkbox") return;
                       handleRowClick(student);
                     }}
                   >
@@ -257,15 +263,23 @@ export default function StudentTable({
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="flex items-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <input
                           type="checkbox"
                           checked={student.self_release || false}
-                          onChange={() => handleSelfReleaseToggle(student.id, student.self_release)}
+                          onChange={() =>
+                            handleSelfReleaseToggle(
+                              student.id,
+                              student.self_release
+                            )
+                          }
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
                         />
                         <span className="ml-2 text-sm text-gray-500">
-                          {student.self_release ? 'Enabled' : 'Disabled'}
+                          {student.self_release ? "Enabled" : "Disabled"}
                         </span>
                       </div>
                     </td>
@@ -293,20 +307,57 @@ export default function StudentTable({
                 </tr>
               )}
             </tbody>
-          </table>
-        </div>
-      </div>
+                </table>
 
-      {/* Student Detail Modal */}
-      <StudentDetailModal
-        student={selectedStudent}
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setSelectedStudent(null);
-        }}
-        onDelete={handleDeleteStudent}
-      />
-    </>
-  );
+      {/* Mobile List */}
+      <div className="md:hidden">
+        {sortedStudents.map((student) => (
+          <div 
+            key={student.id} 
+            className="p-4 border-b border-gray-200 hover:bg-gray-50"
+            onClick={(e) => {
+              if (e.target.type === 'checkbox') return;
+              handleRowClick(student);
+            }}
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="text-sm font-medium text-gray-900">
+                  {student.first_name} {student.last_name}
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <div 
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={student.self_release || false}
+                      onChange={() => handleSelfReleaseToggle(student.id, student.self_release)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                    />
+                    <span className="ml-2 text-sm text-gray-500">
+                      Self Release
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Modal */}
+    <StudentDetailModal
+      student={selectedStudent}
+      isOpen={isModalOpen}
+      onClose={() => {
+        setIsModalOpen(false);
+        setSelectedStudent(null);
+      }}
+      onDelete={handleDeleteStudent}
+    />
+  </>
+);
 }
