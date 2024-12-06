@@ -1,53 +1,101 @@
 // src/components/StudentDetailModal.jsx
-import { useState } from 'react';
-import { X, Trash2, Loader2, Mail, Phone, User, GraduationCap, School } from 'lucide-react';
-import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { useState, useEffect } from "react";
+import {
+  X,
+  Trash2,
+  Loader2,
+  Mail,
+  Phone,
+  User,
+  GraduationCap,
+  School,
+} from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
-export default function StudentDetailModal({ student, isOpen, onClose, onDelete }) {
+export default function StudentDetailModal({
+  student,
+  isOpen,
+  onClose,
+  onDelete,
+}) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [notes, setNotes] = useState(student?.notes || "");
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+
+  useEffect(() => {
+    setNotes(student?.notes || "");
+  }, [student]);
 
   if (!isOpen || !student) return null;
+
+  const handleSaveNotes = async () => {
+    try {
+      setIsSavingNotes(true);
+      const timestamp = new Date().toLocaleString("en-US", {
+        timeZone: "America/Los_Angeles",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+
+      const formattedNote = notes.trim()
+        ? `[${timestamp}] ${notes}\n\n${student.notes || ""}`
+        : student.notes || "";
+
+      const { error } = await supabase
+        .from("students")
+        .update({ notes: formattedNote })
+        .eq("id", student.id);
+
+      if (error) throw error;
+      setNotes(formattedNote);
+      toast.success("Notes saved successfully");
+    } catch (error) {
+      console.error("Error saving notes:", error);
+      toast.error("Failed to save notes");
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
 
   const handleDelete = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     try {
       setIsDeleting(true);
-      console.log('Starting deletion process for student:', student.id);
 
-      // 1. Delete attendance records first
       const { error: attendanceError } = await supabase
-        .from('attendance_records')
+        .from("attendance_records")
         .delete()
-        .eq('student_id', student.id);
+        .eq("student_id", student.id);
 
       if (attendanceError) throw attendanceError;
 
-      // 2. Delete any tournament matches
       const { error: matchesError } = await supabase
-        .from('matches')
+        .from("matches")
         .delete()
         .or(`player1_id.eq.${student.id},player2_id.eq.${student.id}`);
 
       if (matchesError) throw matchesError;
 
-      // 3. Finally delete the student
       const { error: studentError } = await supabase
-        .from('students')
+        .from("students")
         .delete()
-        .eq('id', student.id);
+        .eq("id", student.id);
 
       if (studentError) throw studentError;
 
-      toast.success('Student deleted successfully');
+      toast.success("Student deleted successfully");
       onDelete(student.id);
       onClose();
-      
     } catch (error) {
-      console.error('Delete operation failed:', error);
+      console.error("Delete operation failed:", error);
       toast.error(`Failed to delete student: ${error.message}`);
     } finally {
       setIsDeleting(false);
@@ -57,7 +105,7 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
 
   const ContactSection = ({ title, name, phone, email, relationship }) => {
     if (!name && !phone && !email) return null;
-    
+
     return (
       <div className="border-t border-gray-200 pt-4 mt-4">
         <h4 className="text-sm font-medium text-gray-900 mb-3">{title}</h4>
@@ -74,7 +122,7 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
           {phone && (
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-gray-400" />
-              <a 
+              <a
                 href={`tel:${phone}`}
                 className="text-sm text-blue-600 hover:text-blue-800"
               >
@@ -85,7 +133,7 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
           {email && (
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-gray-400" />
-              <a 
+              <a
                 href={`mailto:${email}`}
                 className="text-sm text-blue-600 hover:text-blue-800"
               >
@@ -101,7 +149,7 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4 text-center">
-        <div 
+        <div
           className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
           onClick={() => !isDeleting && onClose()}
         />
@@ -129,7 +177,9 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
             <div className="space-y-4">
               {/* Basic Information */}
               <div>
-                <h4 className="text-sm font-medium text-gray-900 mb-3">Basic Information</h4>
+                <h4 className="text-sm font-medium text-gray-900 mb-3">
+                  Basic Information
+                </h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-gray-400" />
@@ -142,7 +192,9 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
                   <div className="flex items-center gap-2">
                     <GraduationCap className="h-4 w-4 text-gray-400" />
                     <div>
-                      <p className="text-sm text-gray-900">Grade {student.grade}</p>
+                      <p className="text-sm text-gray-900">
+                        Grade {student.grade}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -152,14 +204,70 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
                     </div>
                   </div>
                   <div>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      student.active
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {student.active ? 'Active' : 'Inactive'}
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        student.active
+                          ? "bg-green-100 text-green-800"
+                          : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      {student.active ? "Active" : "Inactive"}
                     </span>
                   </div>
+                </div>
+              </div>
+
+              {/* Notes Section */}
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <h4 className="text-sm font-medium text-gray-900 mb-3">
+                  Notes
+                </h4>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm text-red-600"
+                  placeholder="Add notes about the student..."
+                />
+                <div className="mt-2 flex justify-end space-x-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        setIsSavingNotes(true);
+                        const { error } = await supabase
+                          .from("students")
+                          .update({ notes: "" })
+                          .eq("id", student.id);
+
+                        if (error) throw error;
+                        setNotes("");
+                        toast.success("Notes cleared successfully");
+                      } catch (error) {
+                        console.error("Error clearing notes:", error);
+                        toast.error("Failed to clear notes");
+                      } finally {
+                        setIsSavingNotes(false);
+                      }
+                    }}
+                    disabled={isSavingNotes || !notes}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={handleSaveNotes}
+                    disabled={isSavingNotes}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {isSavingNotes ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Notes"
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -182,7 +290,9 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
 
               {/* Additional Settings */}
               <div className="border-t border-gray-200 pt-4 mt-4">
-                <h4 className="text-sm font-medium text-gray-900 mb-3">Additional Settings</h4>
+                <h4 className="text-sm font-medium text-gray-900 mb-3">
+                  Additional Settings
+                </h4>
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -191,7 +301,10 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
                     disabled
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
-                  <label htmlFor="self-release" className="text-sm text-gray-900">
+                  <label
+                    htmlFor="self-release"
+                    className="text-sm text-gray-900"
+                  >
                     Self Release Approved
                   </label>
                 </div>
@@ -215,7 +328,7 @@ export default function StudentDetailModal({ student, isOpen, onClose, onDelete 
                       Deleting...
                     </>
                   ) : (
-                    'Confirm Delete'
+                    "Confirm Delete"
                   )}
                 </button>
                 {!isDeleting && (
