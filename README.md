@@ -7,16 +7,20 @@ A web application for managing elementary school chess clubs, designed to stream
 - **Attendance Management**
   - Digital check-in/check-out system
   - Real-time attendance tracking with live updates
-  - Attendance history and analytics
-  - Automatic session management
+  - Self-release approval tracking
+  - Historical session viewing
+  - Pacific Time (PT) synchronization
+  - Automated session creation
   - Weekly attendance statistics
   - Configurable automatic reset schedules
 
 - **Tournament System**
   - Match recording and results tracking 
-  - Student rankings and statistics
+  - Grade-based rankings
+  - Overall tournament standings
   - Real-time tournament standings
   - Material difference tracking
+  - Match history with detailed results
   - Achievement tracking system including:
     - "5 Point Club"
     - "10 Point Master" 
@@ -28,18 +32,24 @@ A web application for managing elementary school chess clubs, designed to stream
 - **Student Management**
   - Digital registration system with validation
   - Comprehensive student directory
-  - Contact information management
-  - Active/inactive status tracking
-  - Grade and teacher tracking
   - Multi-contact support for guardians
+  - Self-release permission management
+  - Contact information management
+  - Student notes and history tracking
+  - Active/inactive status management
+  - Grade and teacher filtering
+  - Real-time student updates
 
 - **Administrative Features**
   - Secure admin dashboard
-  - Data management tools
-  - Automated data cleanup
-  - Scheduled reset management
-  - Audit logging
-  - System configuration
+  - Session management tools
+  - Historical data access
+  - Database reset controls
+  - Student data purging tools
+  - Tournament data reset capability
+  - Automated cleanup scheduling
+  - Real-time synchronization status
+  - Pacific Time enforcement
 
 ## Prerequisites
 
@@ -49,6 +59,34 @@ A web application for managing elementary school chess clubs, designed to stream
 - A Vercel account (free tier works fine)
 - Git installed on your local machine
 
+### Database Features
+
+The application now includes:
+
+1. **Self-Release Management**
+   - Toggle self-release permissions
+   - Track self-release checkouts
+   - Permission inheritance
+   - Real-time permission updates
+
+2. **Historical Session Access**
+   - View past session data
+   - Attendance history tracking
+   - Session statistics
+   - Non-modifiable historical records
+
+3. **Real-Time Updates**
+   - Live attendance tracking
+   - Instant permission changes
+   - Connection status monitoring
+   - Automatic data synchronization
+
+4. **Time Management**
+   - Pacific Time enforcement
+   - Automated session creation
+   - Time-based validations
+   - Session schedule tracking
+   
 ### Supabase Database Setup
 
 1. Create a new Supabase project at [supabase.com](https://supabase.com)
