@@ -69,6 +69,13 @@ export default function StudentTable({
     setIsModalOpen(true);
   };
 
+  const handleUpdateStudent = (updated) => {
+    setStudents((prev) =>
+      prev.map((student) => (student.id === updated.id ? updated : student))
+    );
+    setSelectedStudent(updated);
+  };
+
   const handleDeleteStudent = (studentId) => {
     setStudents((prev) => prev.filter((student) => student.id !== studentId));
   };
@@ -357,6 +364,7 @@ export default function StudentTable({
         setSelectedStudent(null);
       }}
       onDelete={handleDeleteStudent}
+      onUpdate={handleUpdateStudent}
     />
   </>
 );

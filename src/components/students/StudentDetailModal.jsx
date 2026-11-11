@@ -9,23 +9,33 @@ import {
   User,
   GraduationCap,
   School,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { useTeachers } from "@/hooks/useTeachers";
 
 export default function StudentDetailModal({
   student,
   isOpen,
   onClose,
   onDelete,
+  onUpdate,
 }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [notes, setNotes] = useState(student?.notes || "");
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const { activeTeachers } = useTeachers();
+  const [isEditingTeacher, setIsEditingTeacher] = useState(false);
+  const [teacher, setTeacher] = useState(student?.teacher || "");
+  const [isSavingTeacher, setIsSavingTeacher] = useState(false);
 
   useEffect(() => {
     setNotes(student?.notes || "");
+    setTeacher(student?.teacher || "");
+    setIsEditingTeacher(false);
   }, [student]);
 
   if (!isOpen || !student) return null;
@@ -62,6 +72,35 @@ export default function StudentDetailModal({
       setIsSavingNotes(false);
     }
   };
+
+  const handleSaveTeacher = async () => {
+    if (!teacher || teacher === student.teacher) {
+      setIsEditingTeacher(false);
+      return;
+    }
+    try {
+      setIsSavingTeacher(true);
+      const { error } = await supabase
+        .from("students")
+        .update({ teacher })
+        .eq("id", student.id);
+
+      if (error) throw error;
+      onUpdate?.({ ...student, teacher });
+      setIsEditingTeacher(false);
+      toast.success(`${student.first_name} moved to ${teacher}`);
+    } catch (error) {
+      console.error("Error updating teacher:", error);
+      toast.error("Failed to change teacher");
+    } finally {
+      setIsSavingTeacher(false);
+    }
+  };
+
+  // Keep the current teacher selectable even if they've since been deactivated.
+  const teacherOptions = [
+    ...new Set([student.teacher, ...activeTeachers.map((t) => t.name)].filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
 
   const handleDelete = async (e) => {
     e.preventDefault();
@@ -199,9 +238,59 @@ export default function StudentDetailModal({
                   </div>
                   <div className="flex items-center gap-2">
                     <School className="h-4 w-4 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-900">{student.teacher}</p>
-                    </div>
+                    {isEditingTeacher ? (
+                      <div className="flex items-center gap-1">
+                        <select
+                          value={teacher}
+                          onChange={(e) => setTeacher(e.target.value)}
+                          className="rounded-md border-gray-300 text-sm py-1"
+                          aria-label="Teacher"
+                          autoFocus
+                        >
+                          {teacherOptions.map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={handleSaveTeacher}
+                          disabled={isSavingTeacher}
+                          className="p-1 text-green-600 hover:bg-green-50 rounded-md disabled:opacity-50"
+                          aria-label="Save teacher"
+                        >
+                          {isSavingTeacher ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Check className="h-4 w-4" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTeacher(student.teacher || "");
+                            setIsEditingTeacher(false);
+                          }}
+                          className="p-1 text-gray-500 hover:bg-gray-100 rounded-md"
+                          aria-label="Cancel"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <p className="text-sm text-gray-900">{student.teacher}</p>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingTeacher(true)}
+                          className="p-1 text-gray-400 hover:text-gray-700 rounded-md"
+                          aria-label="Change teacher"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <span

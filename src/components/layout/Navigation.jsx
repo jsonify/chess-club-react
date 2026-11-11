@@ -12,6 +12,7 @@ export default function Navigation({ onMenuClick }) {
     { href: '/tournaments', label: 'Tournaments' },
     { href: '/students', label: 'Students' },
     { href: '/registration', label: 'Registration' },
+    { href: '/teachers', label: 'Teachers' },
     { href: '/database', label: 'Database', className: 'text-yellow-600 hover:text-yellow-700' }
   ];
 
