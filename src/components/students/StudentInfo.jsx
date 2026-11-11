@@ -1,13 +1,12 @@
-// src/components/registration/StudentInfo.jsx
+// src/components/students/StudentInfo.jsx
 import FormInput from '@/components/registration/FormInput';
 import FormSelect from '@/components/registration/FormSelect';
+import { useTeachers } from '@/hooks/useTeachers';
 
 export function StudentInfo({ formData, handleChange, errors }) {
-    const TEACHERS = [
-      'Unruh', 'Alderson', 'Otterlee', 'Chapin', 'Larson',
-      'Wildenhaus', 'Parsons', 'Pawling', 'Gregerson', 'Mindt',
-      'Hanson', 'DeLoma', 'Holt', 'Chase', 'Bonnell'
-    ].sort();
+    // Teachers are managed on the Teachers page; only active ones can be picked.
+    const { activeTeachers } = useTeachers();
+    const TEACHERS = activeTeachers.map(t => t.name);
   
     return (
       <div className="bg-white p-6 rounded-lg shadow">

@@ -10,6 +10,7 @@ export default function Sidebar({ open, onClose }) {
     { href: '/registration', label: 'Registration' },
     { href: '/tournaments', label: 'Tournaments' },
     { href: '/students', label: 'Students' },
+    { href: '/teachers', label: 'Teachers' },
     { href: '/database', label: 'Database', className: 'text-yellow-600' }
   ];
 
